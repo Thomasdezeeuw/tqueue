@@ -6,7 +6,7 @@ use std::mem;
 mod tests;
 
 struct Node<T> {
-    /// May be null, but may not point to invalid data.
+    /// May be null, but may **not** point to invalid data.
     next: AtomicPtr<Node<T>>,
     value: T,
 }
@@ -22,7 +22,7 @@ impl<T> Node<T> {
 }
 
 pub struct AtomicVecDeque<T> {
-    /// May be null, but may not point to invalid data.
+    /// May be null, but may **not** point to invalid data.
     head: AtomicPtr<Node<T>>,
 }
 
