@@ -26,7 +26,7 @@ pub struct AtomicVecDeque<T> {
     head: AtomicPtr<Node<T>>,
 }
 
-/// The maximum number of tries before an opations gives up.
+/// The maximum number of tries before an operation gives up.
 const MAX_TRIES: usize = 20;
 
 // TODO: try to relax the ordering, on a per call basis.
