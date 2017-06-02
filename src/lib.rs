@@ -68,18 +68,24 @@ impl<T> AtomicVecDeque<T> {
             let head_ptr = self.head.load(DEFAULT_ORDERING);
             let head = unsafe {
                 // This is safe because the contract is that the pointer always
-                // points to valid memory.
+                // points to valid memory, iff not null.
                 head_ptr.as_ref()
             };
             if let Some(head) = head {
-                // Then get the pointer for the new head (head.next).
+                // Next get the pointer for the new head.
                 let new_head = head.next.load(DEFAULT_ORDERING);
                 // Try to exchange the new head pointer for the "old head", making
                 // sure the current head pointer is still the same as we expected.
                 let result = self.head.compare_exchange(head_ptr, new_head,
                     DEFAULT_ORDERING, DEFAULT_ORDERING);
                 if let Ok(old_head_ptr) = result {
-                    let node = unsafe { ptr::read(old_head_ptr) };
+                    // All went ok, now we can read the pointer and return the
+                    // value.
+                    let node = unsafe {
+                        // This is safe because of the contract that the pointer
+                        // always points to valid memory, iff not null.
+                        ptr::read(old_head_ptr)
+                    };
                     return Some(node.value);
                 } else {
                     // The old head was changed, we need to try again.
