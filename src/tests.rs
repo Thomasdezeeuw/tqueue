@@ -7,24 +7,25 @@ fn assert_sync<T: Sync>() {}
 
 #[test]
 fn is_sync_and_send() {
-    assert_send::<AtomicVecDeque<usize>>();
-    assert_sync::<AtomicVecDeque<usize>>();
+    assert_send::<Queue<usize>>();
+    assert_sync::<Queue<usize>>();
 }
 
 #[test]
 fn simple_pushing_and_popping() {
-    let dequeu = AtomicVecDeque::new();
+    let queue = Queue::new();
 
-    dequeu.push_front("My value1".to_owned());
-    assert_eq!(dequeu.pop_front(), Some("My value1".to_owned()));
-    assert_eq!(dequeu.pop_front(), None);
 
-    dequeu.push_front("My value2".to_owned());
-    dequeu.push_front("My value3".to_owned());
-    assert_eq!(dequeu.pop_front(), Some("My value3".to_owned()));
-    assert_eq!(dequeu.pop_front(), Some("My value2".to_owned()));
+    queue.push_front("My value1".to_owned());
+    assert_eq!(queue.pop_front(), Some("My value1".to_owned()));
+    assert_eq!(queue.pop_front(), None);
 
-    assert_eq!(dequeu.pop_front(), None);
+    queue.push_front("My value2".to_owned());
+    queue.push_front("My value3".to_owned());
+    assert_eq!(queue.pop_front(), Some("My value3".to_owned()));
+    assert_eq!(queue.pop_front(), Some("My value2".to_owned()));
+
+    assert_eq!(queue.pop_front(), None);
 }
 
 struct NotCopyable {
@@ -57,22 +58,22 @@ impl fmt::Debug for NotCopyable {
 
 #[test]
 fn stress_pushing_and_popping() {
-    let dequeu = AtomicVecDeque::new();
+    let queue = Queue::new();
 
     const MAX: usize = 1_000_000;
 
     for n in 0..MAX {
         println!("addding value: {}", n);
-        dequeu.push_front(NotCopyable::new(n));
+        queue.push_front(NotCopyable::new(n));
     }
 
     for n in (0..).take(MAX) {
         // Getting them back in reverse order.
         let want = Some(NotCopyable::new(MAX - 1 - n));
-        let got = dequeu.pop_front();
+        let got = queue.pop_front();
         println!("got: {:?}", got);
         assert_eq!(got, want);
     }
 
-    assert_eq!(dequeu.pop_front(), None);
+    assert_eq!(queue.pop_front(), None);
 }

@@ -21,7 +21,7 @@ impl<T> Node<T> {
     }
 }
 
-pub struct AtomicVecDeque<T> {
+pub struct Queue<T> {
     /// May be null, but may **not** point to invalid data.
     head: AtomicPtr<Node<T>>,
 }
@@ -32,10 +32,10 @@ const MAX_TRIES: usize = 20;
 // TODO: try to relax the ordering, on a per call basis.
 const DEFAULT_ORDERING: Ordering = Ordering::SeqCst;
 
-impl<T> AtomicVecDeque<T> {
+impl<T> Queue<T> {
     /// Create a new waiting queue.
-    pub fn new() -> AtomicVecDeque<T> {
-        AtomicVecDeque {
+    pub fn new() -> Queue<T> {
+        Queue {
             head: AtomicPtr::new(ptr::null_mut()),
         }
     }
@@ -102,7 +102,7 @@ impl<T> AtomicVecDeque<T> {
     }
 }
 
-impl<T> Drop for AtomicVecDeque<T> {
+impl<T> Drop for Queue<T> {
     fn drop(&mut self) {
         // TODO: implement an iteration and use that instead.
         loop {
