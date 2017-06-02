@@ -1,4 +1,4 @@
 [package]
-name = "atomic-vecdeque"
+name = "tqueue"
 version = "0.1.0"
 authors = ["Thomas de Zeeuw <thomasdezeeuw@gmail.com>"]
