@@ -2,6 +2,9 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ptr;
 use std::mem;
 
+mod pos;
+pub use pos::{Pos, AtomicPos};
+
 #[cfg(test)]
 mod tests;
 
