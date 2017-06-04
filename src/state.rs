@@ -1,6 +1,4 @@
-use std::cell::UnsafeCell;
-use std::{mem, ptr};
-use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 
 use super::DEFAULT_ORDERING;
 
