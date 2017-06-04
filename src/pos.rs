@@ -7,6 +7,7 @@ pub type Pos = (i16, i16);
 
 /// An `AtomicPos` is a single atomic that holds both a `head` and `tail`
 /// position. Each operation (method) on this struct is a single atomic operation.
+#[derive(Debug)]
 pub struct AtomicPos {
     // TODO: See what the performance difference is with different sizes, e.g.
     // i32 vs i64. Requires specific atomic sizes, see

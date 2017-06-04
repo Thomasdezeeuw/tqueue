@@ -35,6 +35,7 @@ pub enum State {
 /// [`Writing`]: ./enum.State.html#variant.Writing
 /// [`Ready`]: ./enum.State.html#variant.Ready
 /// [`Reading`]: ./enum.State.html#variant.Reading
+#[derive(Debug)]
 pub struct AtomicState {
     state: AtomicUsize,
 }
