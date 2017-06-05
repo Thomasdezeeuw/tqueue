@@ -77,8 +77,8 @@ impl AtomicState {
     }
 
     /// Set the state to [`Ready`], returns true if all is ok. However it
-    /// returns false if the state is not set to [`Ready`], which is the case
-    /// if the current state is not [`Writing`].
+    /// returns false if the state is not set to [`Ready`], which is the case if
+    /// the current state is not [`Writing`].
     ///
     /// [`Ready`]: ./enum.State.html#variant.Ready
     /// [`Writing`]: ./enum.State.html#variant.Writing
@@ -97,8 +97,8 @@ impl AtomicState {
     }
 
     /// Set the state to [`Empty`], returns true if all is ok. However it
-    /// returns false if the state is not set to [`Empty`], which is the case
-    /// if the current state is not [`Reading`].
+    /// returns false if the state is not set to [`Empty`], which is the case if
+    /// the current state is not [`Reading`].
     ///
     /// [`Empty`]: ./enum.State.html#variant.Empty
     /// [`Reading`]: ./enum.State.html#variant.Reading
