@@ -13,7 +13,7 @@ pub struct SegmentData<T> {
     data: UnsafeCell<T>,
 }
 
-impl<T> SegmentData<T> {
+impl<T: Send + Sync> SegmentData<T> {
     /// Create new empty segment data.
     pub fn empty() -> SegmentData<T> {
         SegmentData {
@@ -172,7 +172,7 @@ mod tests {
     }
 
     fn test_segment_data<T>(value1: T, value2: T, err_value: T)
-        where T: Clone + PartialEq + fmt::Debug
+        where T: Send + Sync + Clone + PartialEq + fmt::Debug
     {
         let data = SegmentData::empty();
         assert!(data.is_empty());
