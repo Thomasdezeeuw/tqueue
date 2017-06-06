@@ -18,7 +18,7 @@ impl<T: Send + Sync> SegmentData<T> {
     pub fn empty() -> SegmentData<T> {
         SegmentData {
             state: AtomicState::empty(),
-            data: unsafe { mem::uninitialized() },
+            data: UnsafeCell::new(unsafe { mem::uninitialized() }),
         }
     }
 
