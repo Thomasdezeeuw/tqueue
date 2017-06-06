@@ -1,5 +1,5 @@
 use std::cell::UnsafeCell;
-use std::{mem, ptr};
+use std::{fmt, mem, ptr};
 
 use super::state::AtomicState;
 
@@ -70,10 +70,13 @@ impl<T> SegmentData<T> {
     }
 }
 
+impl<T> fmt::Debug for SegmentData<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.pad("SegmentData{{ ... }}")
+    }
+}
 #[cfg(test)]
 mod tests {
-    use std::fmt;
-
     use super::*;
 
     struct NotCopyable {
