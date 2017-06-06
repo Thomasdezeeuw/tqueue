@@ -40,7 +40,9 @@ impl<T: Send + Sync> SegmentData<T> {
         // Set the state to writing, if this returns false it means we can't
         // write the value currently and we'll return an error.
         if self.state.set_writing() {
-            // Write the actual data.
+            // Write the actual data, because the data stored in `UnsafeCell` is
+            // always uninitialized, either in `SegmentData::empty` or
+            // `SegmentData.pop`, so its safe to overwrite it.
             unsafe { ptr::write(self.data.get(), value); }
             // Update the state to indicate the data is ready.
             // TODO: what to do with this check.
