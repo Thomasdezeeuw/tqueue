@@ -14,7 +14,7 @@ mod assertions {
 
     use super::pos::AtomicPos;
     use super::state::AtomicState;
-    use super::segment::{Segment, SegmentData, SegmentId, SEGMENT_SIZE};
+    use super::segment::SegmentData;
 
     fn assert_send<T: Send>() {}
     fn assert_sync<T: Sync>() {}
