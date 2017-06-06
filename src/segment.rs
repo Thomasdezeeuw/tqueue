@@ -117,8 +117,23 @@ mod tests {
     }
 
     #[test]
-    fn segment_data_simple() {
-        test_segment_data(1, 2, 0);
+    fn segment_data_u8() {
+        test_segment_data(1u8, 2, 0);
+    }
+
+    #[test]
+    fn segment_data_u16() {
+        test_segment_data(1u16, 2, 0);
+    }
+
+    #[test]
+    fn segment_data_u32() {
+        test_segment_data(1u32, 2, 0);
+    }
+
+    #[test]
+    fn segment_data_u64() {
+        test_segment_data(1u64, 2, 0);
     }
 
     #[test]
@@ -137,8 +152,23 @@ mod tests {
     }
 
     #[test]
-    fn segment_data_vector() {
-        test_segment_data(vec![1, 2, 3], vec![4, 5, 6], vec![]);
+    fn segment_data_vector_u8() {
+        test_segment_data(vec![1u8, 2, 3], vec![4, 5, 6], vec![]);
+    }
+
+    #[test]
+    fn segment_data_vector_u16() {
+        test_segment_data(vec![1u16, 2, 3], vec![4, 5, 6], vec![]);
+    }
+
+    #[test]
+    fn segment_data_vector_u32() {
+        test_segment_data(vec![1u32, 2, 3], vec![4, 5, 6], vec![]);
+    }
+
+    #[test]
+    fn segment_data_vector_u64() {
+        test_segment_data(vec![1u64, 2, 3], vec![4, 5, 6], vec![]);
     }
 
     fn test_segment_data<T>(value1: T, value2: T, err_value: T)
@@ -163,6 +193,8 @@ mod tests {
         assert!(data.is_empty());
         assert!(!data.is_ready());
         assert!(data.pop().is_none());
+        assert!(data.is_empty());
+        assert!(!data.is_ready());
 
         // Test reuseage:
 
@@ -171,13 +203,16 @@ mod tests {
         assert!(!data.is_empty());
         assert!(data.is_ready());
         let got2 = data.pop();
-        assert_eq!(got2, Some(value2));
+        assert_eq!(got2, Some(value2.clone()));
         assert!(data.is_empty());
         assert!(!data.is_ready());
         assert!(data.pop().is_none());
+        assert!(data.is_empty());
+        assert!(!data.is_ready());
 
         // Test the orignal value again, make sure it's not overwritten.
         assert_eq!(got1, Some(value1));
-        assert!(got1 != got2);
+        assert_eq!(got2, Some(value2));
+        assert_ne!(got1, got2);
     }
 }
