@@ -75,6 +75,9 @@ impl<T> fmt::Debug for SegmentData<T> {
         f.pad("SegmentData{{ ... }}")
     }
 }
+
+unsafe impl<T> Sync for SegmentData<T> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
