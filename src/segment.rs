@@ -80,7 +80,9 @@ impl<T> fmt::Debug for SegmentData<T> {
     }
 }
 
-unsafe impl<T> Sync for SegmentData<T> {}
+unsafe impl<T: Send + Sync> Send for SegmentData<T> {}
+
+unsafe impl<T: Send + Sync> Sync for SegmentData<T> {}
 
 #[cfg(test)]
 mod tests {
