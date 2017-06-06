@@ -117,12 +117,28 @@ mod tests {
     }
 
     #[test]
-    fn segment_data() {
-        test_segment_data(NotCopyable::new(100), NotCopyable::new(200), NotCopyable::new(0));
-        test_segment_data("value 1".to_owned(), "value 2".to_owned(), "err value".to_owned());
-        test_segment_data("value 1", "value 2", "err value");
-        test_segment_data(vec![1, 2, 3], vec![4, 5, 6], vec![]);
+    fn segment_data_simple() {
         test_segment_data(1, 2, 0);
+    }
+
+    #[test]
+    fn segment_data_str() {
+        test_segment_data("value 1", "value 2", "err value");
+    }
+
+    #[test]
+    fn segment_data_not_copyable() {
+        test_segment_data(NotCopyable::new(100), NotCopyable::new(200), NotCopyable::new(0));
+    }
+
+    #[test]
+    fn segment_data_string() {
+        test_segment_data("value 1".to_owned(), "value 2".to_owned(), "err value".to_owned());
+    }
+
+    #[test]
+    fn segment_data_vector() {
+        test_segment_data(vec![1, 2, 3], vec![4, 5, 6], vec![]);
     }
 
     fn test_segment_data<T>(value1: T, value2: T, err_value: T)
