@@ -84,37 +84,12 @@ unsafe impl<T> Sync for SegmentData<T> {}
 mod tests {
     use super::*;
 
-    struct NotCopyable {
-        value: usize,
-        /// This is here to make sure the memory gets allocted.
-        #[allow(dead_code)]
-        bytes: [u8; 100]
-    }
+    #[derive(Eq, PartialEq, Debug, Clone)]
+    struct NotCopyable(usize);
 
     impl NotCopyable {
         pub fn new(value: usize) -> NotCopyable {
-            NotCopyable {
-                value: value,
-                bytes: [0; 100],
-            }
-        }
-    }
-
-    impl PartialEq for NotCopyable {
-        fn eq(&self, other: &NotCopyable) -> bool {
-            self.value == other.value
-        }
-    }
-
-    impl fmt::Debug for NotCopyable {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "NotCopyable{{ value: {} }}", self.value)
-        }
-    }
-
-    impl Clone for NotCopyable {
-        fn clone(&self) -> NotCopyable {
-            NotCopyable::new(self.value)
+            NotCopyable(value)
         }
     }
 
