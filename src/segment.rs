@@ -59,7 +59,9 @@ impl<T: Send + Sync> SegmentData<T> {
         // read the value currently and we'll return `None`.
         if self.state.set_reading() {
             // Read the data located on the heap, this will allocate a
-            let data = unsafe { ptr::read(self.data.get()) };
+            let data = unsafe {
+                ptr::replace(self.data.get(), mem::uninitialized())
+            };
             // Update the state to indicate the data is empty.
             // TODO: what to do with this check.
             assert!(self.state.set_empty());
