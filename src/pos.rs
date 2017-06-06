@@ -2,8 +2,8 @@ use std::sync::atomic::AtomicIsize;
 
 use super::DEFAULT_ORDERING;
 
-/// A single position, first value is the `head`, the second the `tail` position.
-pub type Pos = (i16, i16);
+/// A single position.
+pub type Pos = i16;
 
 /// An `AtomicPos` is a single atomic that holds both a `head` and `tail`
 /// position. Each operation (method) on this struct is a single atomic operation.
@@ -17,7 +17,7 @@ pub struct AtomicPos {
 
 impl AtomicPos {
     /// Create a new `AtomicPos`, with a starting `head` and `tail` position.
-    pub fn new(head: i16, tail: i16) -> AtomicPos {
+    pub fn new(head: Pos, tail: Pos) -> AtomicPos {
         // If the head is negative we don't want all the high bits to be set to
         // 1 and then overwrite them with the tail, this will cause the tail to
         // always be incorrect. To fix this we'll make the head positive and
@@ -36,67 +36,67 @@ impl AtomicPos {
     }
 
     /// Load both the `head` and `tail` positions.
-    pub fn load(&self) -> Pos {
+    pub fn load(&self) -> (Pos, Pos) {
         split(self.pos.load(DEFAULT_ORDERING))
     }
 
     /// Load `head` position.
-    pub fn load_head(&self) -> i16 {
+    pub fn load_head(&self) -> Pos {
         high(self.pos.load(DEFAULT_ORDERING))
     }
 
     /// Load `tail` position.
-    pub fn load_tail(&self) -> i16 {
+    pub fn load_tail(&self) -> Pos {
         low(self.pos.load(DEFAULT_ORDERING))
     }
 
     /// Increase both the `head` and `tail` positions, returning the old values.
-    pub fn increase_both(&self) -> Pos {
+    pub fn increase_both(&self) -> (Pos, Pos) {
         split(self.pos.fetch_add(1 + (1 << 16), DEFAULT_ORDERING))
     }
 
     /// Increase `head` position, returning the old value.
-    pub fn increase_head(&self) -> i16 {
+    pub fn increase_head(&self) -> Pos {
         high(self.pos.fetch_add(1, DEFAULT_ORDERING))
     }
 
     /// Increase `tail` position, returning the old value.
-    pub fn increase_tail(&self) -> i16 {
+    pub fn increase_tail(&self) -> Pos {
         low(self.pos.fetch_add(1 << 16, DEFAULT_ORDERING))
     }
 
     /// Decrease both the `head` and `tail` positions, returning the old values.
-    pub fn decrease_both(&self) -> Pos {
+    pub fn decrease_both(&self) -> (Pos, Pos) {
         split(self.pos.fetch_sub(1 + (1 << 16), DEFAULT_ORDERING))
     }
 
     /// Decrease `head` position, returning the old value.
-    pub fn decrease_head(&self) -> i16 {
+    pub fn decrease_head(&self) -> Pos {
         high(self.pos.fetch_sub(1, DEFAULT_ORDERING))
     }
 
     /// Decrease `tail` position, returning the old value.
-    pub fn decrease_tail(&self) -> i16 {
+    pub fn decrease_tail(&self) -> Pos {
         low(self.pos.fetch_sub(1 << 16, DEFAULT_ORDERING))
     }
 }
 
 /// Returns both the `head` and `tail` positions.
 #[inline(always)]
-fn split(value: isize) -> Pos {
+fn split(value: isize) -> (Pos, Pos) {
     (high(value), low(value))
 }
 
 /// Return the `head` position.
 #[inline(always)]
-fn high(value: isize) -> i16 {
-    value as i16
+fn high(value: isize) -> Pos {
+    value as Pos
 }
 
 /// Return the `tail` position.
 #[inline(always)]
-fn low(value: isize) -> i16 {
-    (value >> 16) as i16
+fn low(value: isize) -> Pos {
+    (value >> 16) as Pos
 }
 
 #[cfg(test)]
@@ -105,8 +105,8 @@ mod tests {
 
     #[test]
     fn atomic_position() {
-        const MIN: i16 = ::std::i16::MIN + 1; // Don't underflow.
-        const MAX: i16 = ::std::i16::MAX - 8; // Don't overflow.
+        const MIN: Pos = ::std::i16::MIN + 1; // Don't underflow.
+        const MAX: Pos = ::std::i16::MAX - 8; // Don't overflow.
         let tests = vec![
             (0, 0),
             (-100, 100),
