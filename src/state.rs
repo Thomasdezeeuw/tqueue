@@ -5,7 +5,7 @@ use super::DEFAULT_ORDERING;
 /// A state for a segment of data, for an concurrent version see
 /// [`AtomicState`].
 ///
-/// [`AtomicState`]: ./struct.AtomicState.html
+/// [`AtomicState`]: struct.AtomicState.html
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum State {
     /// No data has been written.
@@ -28,11 +28,11 @@ pub enum State {
 /// [`Writing`] -> [`Ready`] -> [`Reading`] -> [`Ready`] -> [`Writing`] ->
 /// [`Empty`], and can be reused at that point.
 ///
-/// [`State`]: ./enum.State.html
-/// [`Empty`]: ./enum.State.html#variant.Empty
-/// [`Writing`]: ./enum.State.html#variant.Writing
-/// [`Ready`]: ./enum.State.html#variant.Ready
-/// [`Reading`]: ./enum.State.html#variant.Reading
+/// [`State`]: enum.State.html
+/// [`Empty`]: enum.State.html#variant.Empty
+/// [`Writing`]: enum.State.html#variant.Writing
+/// [`Ready`]: enum.State.html#variant.Ready
+/// [`Reading`]: enum.State.html#variant.Reading
 #[derive(Debug)]
 pub struct AtomicState {
     state: AtomicUsize,
@@ -41,7 +41,7 @@ pub struct AtomicState {
 impl AtomicState {
     /// Create a new atomic state, starting in the [`Empty`] state.
     ///
-    /// [`Empty`]: ./enum.State.html#variant.Empty
+    /// [`Empty`]: enum.State.html#variant.Empty
     pub fn empty() -> AtomicState {
         AtomicState {
             state: AtomicUsize::new(State::Empty as usize),
@@ -50,14 +50,14 @@ impl AtomicState {
 
     /// Check if the current state is [`Empty`].
     ///
-    /// [`Empty`]: ./enum.State.html#variant.Empty
+    /// [`Empty`]: enum.State.html#variant.Empty
     pub fn is_empty(&self) -> bool {
         self.is_in_state(State::Empty)
     }
 
     /// Check if the current state is [`Ready`].
     ///
-    /// [`Ready`]: ./enum.State.html#variant.Ready
+    /// [`Ready`]: enum.State.html#variant.Ready
     pub fn is_ready(&self) -> bool {
         self.is_in_state(State::Ready)
     }
@@ -70,8 +70,8 @@ impl AtomicState {
     /// returns false if the state is not set to [`Writing`], which is the case
     /// if the current state is not [`Empty`].
     ///
-    /// [`Writing`]: ./enum.State.html#variant.Writing
-    /// [`Empty`]: ./enum.State.html#variant.Empty
+    /// [`Writing`]: enum.State.html#variant.Writing
+    /// [`Empty`]: enum.State.html#variant.Empty
     pub fn set_writing(&self) -> bool {
         self.swap_state(State::Empty, State::Writing)
     }
@@ -80,8 +80,8 @@ impl AtomicState {
     /// returns false if the state is not set to [`Ready`], which is the case if
     /// the current state is not [`Writing`].
     ///
-    /// [`Ready`]: ./enum.State.html#variant.Ready
-    /// [`Writing`]: ./enum.State.html#variant.Writing
+    /// [`Ready`]: enum.State.html#variant.Ready
+    /// [`Writing`]: enum.State.html#variant.Writing
     pub fn set_ready(&self) -> bool {
         self.swap_state(State::Writing, State::Ready)
     }
@@ -90,8 +90,8 @@ impl AtomicState {
     /// returns false if the state is not set to [`Reading`], which is the case
     /// if the current state is not [`Ready`].
     ///
-    /// [`Reading`]: ./enum.State.html#variant.Reading
-    /// [`Ready`]: ./enum.State.html#variant.Ready
+    /// [`Reading`]: enum.State.html#variant.Reading
+    /// [`Ready`]: enum.State.html#variant.Ready
     pub fn set_reading(&self) -> bool {
         self.swap_state(State::Ready, State::Reading)
     }
@@ -100,8 +100,8 @@ impl AtomicState {
     /// returns false if the state is not set to [`Empty`], which is the case if
     /// the current state is not [`Reading`].
     ///
-    /// [`Empty`]: ./enum.State.html#variant.Empty
-    /// [`Reading`]: ./enum.State.html#variant.Reading
+    /// [`Empty`]: enum.State.html#variant.Empty
+    /// [`Reading`]: enum.State.html#variant.Reading
     pub fn set_empty(&self) -> bool {
         self.swap_state(State::Reading, State::Empty)
     }
