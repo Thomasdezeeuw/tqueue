@@ -55,8 +55,8 @@ mod assertions {
         assert_sync::<SegmentData<u64>>();
         assert_debug::<SegmentData<u64>>();
 
-        // Size of `AtomicState` + 8 bytes for `u64`.
-        let want = mem::size_of::<AtomicState>() + 8;
+        // Size of `AtomicState` + the size of an option of `u64`.
+        let want = mem::size_of::<AtomicState>() + mem::size_of::<Option<u64>>();
         assert_size::<SegmentData<u64>>(want);
     }
 }

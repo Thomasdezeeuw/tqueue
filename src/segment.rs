@@ -1,5 +1,5 @@
 use std::cell::UnsafeCell;
-use std::{fmt, mem, ptr};
+use std::{fmt, mem};
 
 use super::state::AtomicState;
 
@@ -10,15 +10,18 @@ pub struct SegmentData<T> {
     state: AtomicState,
 
     /// The actual data, protected by the state.
-    data: UnsafeCell<T>,
+    ///
+    /// If the `state` is `Empty` this must be `None`. However if the `state` is
+    /// `Ready` this must be `Some`.
+    data: UnsafeCell<Option<T>>,
 }
 
-impl<T: Send + Sync> SegmentData<T> {
+impl<T> SegmentData<T> {
     /// Create new empty segment data.
     pub fn empty() -> SegmentData<T> {
         SegmentData {
             state: AtomicState::empty(),
-            data: UnsafeCell::new(unsafe { mem::uninitialized() }),
+            data: UnsafeCell::new(None),
         }
     }
 
@@ -38,13 +41,16 @@ impl<T: Send + Sync> SegmentData<T> {
     /// written to).
     pub fn write(&self, value: T) -> Result<(), T> {
         // Set the state to writing, if this returns false it means we can't
-        // write the value currently and we'll return an error.
+        // currently write the value and we'll return an error.
         if self.state.set_writing() {
-            // Write the actual data, because the data stored in `UnsafeCell` is
-            // always uninitialized, either in `SegmentData::empty` or
-            // `SegmentData.pop`, so its safe to overwrite it.
-            unsafe { ptr::write(self.data.get(), value); }
-            // Update the state to indicate the data is ready.
+            let data = unsafe {
+                // This is safe because of the contract described in the `data`
+                // field.
+                &mut *self.data.get()
+            };
+            mem::replace(data, Some(value));
+
+            // Update the `state` to indicate the data is `Ready`.
             // TODO: what to do with this check.
             assert!(self.state.set_ready());
             Ok(())
@@ -57,17 +63,20 @@ impl<T: Send + Sync> SegmentData<T> {
     /// segment will be empty. If the segment is already empty it will return
     /// `None`.
     pub fn pop(&self) -> Option<T> {
-        // Set the state to reading, if this returns false it means we can't
-        // read the value currently and we'll return `None`.
+        // Set the state to reading, if this returns false it means we currently
+        // can't read the value and we'll return `None`.
         if self.state.set_reading() {
-            // Read the data located on the heap, this will allocate a
-            let data = unsafe {
-                ptr::replace(self.data.get(), mem::uninitialized())
-            };
+            // Take the data and leave `None` in its place.
+            let value = unsafe {
+                // This is safe because of the contract described in the `data`
+                // field.
+                &mut *self.data.get()
+            }.take();
+
             // Update the state to indicate the data is empty.
             // TODO: what to do with this check.
             assert!(self.state.set_empty());
-            Some(data)
+            value
         } else {
             None
         }
@@ -86,70 +95,124 @@ unsafe impl<T: Send + Sync> Sync for SegmentData<T> {}
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, RwLock};
+
     use super::*;
 
     #[derive(Eq, PartialEq, Debug, Clone)]
-    struct NotCopyable(usize);
+    struct NoCopy(usize);
 
-    impl NotCopyable {
-        pub fn new(value: usize) -> NotCopyable {
-            NotCopyable(value)
+    struct DropTest(Arc<RwLock<NoCopy>>);
+
+    impl Drop for DropTest {
+        fn drop(&mut self) {
+            let mut value = self.0.write().unwrap();
+            value.0 += 1;
         }
     }
 
     #[test]
-    fn segment_data_u8() {
+    fn segment_data_drop_test() {
+        let value = Arc::new(RwLock::new(NoCopy(0)));
+
+        test_drop_empty_segment_data();
+        test_drop_filled_segment_data(value.clone());
+        test_drop_after_poping_segment_data(value.clone());
+        assert_eq!(*value.read().unwrap(), NoCopy(2));
+    }
+
+    fn test_drop_filled_segment_data(value: Arc<RwLock<NoCopy>>) {
+        {
+            let data = SegmentData::empty();
+            {
+                assert!(data.write(DropTest(value.clone())).is_ok());
+            }
+            // Should not be dropped yet.
+            assert_eq!(*value.read().unwrap(), NoCopy(0));
+        }
+        // The data should be dropped now.
+        assert_eq!(*value.read().unwrap(), NoCopy(1));
+    }
+
+    fn test_drop_empty_segment_data() {
+        // Shouldn't try to drop anything.
+        let data: SegmentData<DropTest> = SegmentData::empty();
+        // Shouldn't panic.
+        mem::drop(data);
+    }
+
+    fn test_drop_after_poping_segment_data(value: Arc<RwLock<NoCopy>>) {
+        {
+            let data = SegmentData::empty();
+            {
+                assert!(data.write(DropTest(value.clone())).is_ok());
+            }
+            {
+                let got_value = data.pop();
+                // Should not be dropped yet.
+                assert_eq!(*value.read().unwrap(), NoCopy(1));
+                let got = &got_value.unwrap().0;
+                let got = got.read().unwrap();
+                let want = value.read().unwrap().clone();
+                assert_eq!(*got, want);
+                // Shouldn't be dropped yet.
+                assert_eq!(*value.read().unwrap(), NoCopy(1));
+            }
+            // The data should be dropped now.
+            assert_eq!(*value.read().unwrap(), NoCopy(2));
+        }
+        // The data shouldn't be dropped again.
+        assert_eq!(*value.read().unwrap(), NoCopy(2));
+    }
+
+    #[test]
+    fn segment_data_usigned_integers() {
         test_segment_data(1u8, 2, 0);
-    }
-
-    #[test]
-    fn segment_data_u16() {
-        test_segment_data(1u16, 2, 0);
-    }
-
-    #[test]
-    fn segment_data_u32() {
-        test_segment_data(1u32, 2, 0);
-    }
-
-    #[test]
-    fn segment_data_u64() {
-        test_segment_data(1u64, 2, 0);
-    }
-
-    #[test]
-    fn segment_data_str() {
-        test_segment_data("value 1", "value 2", "err value");
-    }
-
-    #[test]
-    fn segment_data_not_copyable() {
-        test_segment_data(NotCopyable::new(100), NotCopyable::new(200), NotCopyable::new(0));
+        test_segment_data(3u16, 4, 0);
+        test_segment_data(5u32, 6, 0);
+        test_segment_data(7u64, 8, 0);
+        test_segment_data(-1i8, 2, 0);
+        test_segment_data(-3i16, 4, 0);
+        test_segment_data(-5i32, 6, 0);
+        test_segment_data(-7i64, 8, 0);
     }
 
     #[test]
     fn segment_data_string() {
+        test_segment_data("value 1", "value 2", "err value");
         test_segment_data("value 1".to_owned(), "value 2".to_owned(), "err value".to_owned());
+        test_segment_data("value 1".as_bytes(), "value 2".as_bytes(), "err value".as_bytes());
     }
 
     #[test]
-    fn segment_data_vector_u8() {
-        test_segment_data(vec![1u8, 2, 3], vec![4, 5, 6], vec![]);
+    fn segment_data_vector() {
+        test_segment_data(vec![1u8, 2, 3], vec![4, 5, 6], vec![7, 8, 9]);
+        test_segment_data(vec![10u16, 12, 13], vec![14, 15, 16], vec![17, 18, 19]);
+        test_segment_data(vec![20u32, 22, 23], vec![24, 25, 26], vec![27, 28, 29]);
+        test_segment_data(vec![30u64, 32, 33], vec![34, 35, 36], vec![37, 38, 39]);
+        test_segment_data(vec![-1i8, 2, 3], vec![4, 5, 6], vec![7, 8, 9]);
+        test_segment_data(vec![-10i16, 12, 13], vec![14, 15, 16], vec![17, 18, 19]);
+        test_segment_data(vec![-20i32, 22, 23], vec![24, 25, 26], vec![27, 28, 29]);
+        test_segment_data(vec![-30i64, 32, 33], vec![34, 35, 36], vec![37, 38, 39]);
+
+        test_segment_data(vec!["1", "2", "3"],
+            vec!["4", "5", "6"],
+            vec!["7", "8", "9"]);
+        test_segment_data(vec!["1".to_owned(), "2".to_owned(), "3".to_owned()],
+            vec!["4".to_owned(), "5".to_owned(), "6".to_owned()],
+            vec!["7".to_owned(), "8".to_owned(), "9".to_owned()]);
+        test_segment_data(vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes()],
+            vec!["4".as_bytes(), "5".as_bytes(), "6".as_bytes()],
+            vec!["7".as_bytes(), "8".as_bytes(), "9".as_bytes()]);
+
+        test_segment_data(vec![NoCopy(1), NoCopy(2), NoCopy(2)],
+            vec![NoCopy(4), NoCopy(5), NoCopy(6)],
+            vec![NoCopy(7), NoCopy(8), NoCopy(9)]);
     }
 
     #[test]
-    fn segment_data_vector_u16() {
-        test_segment_data(vec![1u16, 2, 3], vec![4, 5, 6], vec![]);
-    }
-
-    #[test]
-    fn segment_data_vector_u32() {
-        test_segment_data(vec![1u32, 2, 3], vec![4, 5, 6], vec![]);
-    }
-
-    #[test]
-    fn segment_data_vector_u64() {
-        test_segment_data(vec![1u64, 2, 3], vec![4, 5, 6], vec![]);
+    fn segment_data_not_copyable() {
+        test_segment_data(NoCopy(100), NoCopy(200), NoCopy(0));
     }
 
     fn test_segment_data<T>(value1: T, value2: T, err_value: T)
@@ -192,7 +255,7 @@ mod tests {
         assert!(!data.is_ready());
 
         // Test the orignal value again, make sure it's not overwritten.
-        assert_eq!(got1, Some(value1));
+        assert_eq!(got1, Some(value1.clone()));
         assert_eq!(got2, Some(value2));
         assert_ne!(got1, got2);
     }
