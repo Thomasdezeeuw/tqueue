@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn segment_data_usigned_integers() {
+    fn segment_data_integers() {
         test_segment_data(1u8, 2, 0);
         test_segment_data(3u16, 4, 0);
         test_segment_data(5u32, 6, 0);
@@ -226,14 +226,14 @@ mod tests {
     }
 
     #[test]
-    fn segment_data_string() {
+    fn segment_data_strings() {
         test_segment_data("value 1", "value 2", "err value");
         test_segment_data("value 1".to_owned(), "value 2".to_owned(), "err value".to_owned());
         test_segment_data("value 1".as_bytes(), "value 2".as_bytes(), "err value".as_bytes());
     }
 
     #[test]
-    fn segment_data_vector() {
+    fn segment_data_vectors() {
         test_segment_data(vec![1u8, 2, 3], vec![4, 5, 6], vec![7, 8, 9]);
         test_segment_data(vec![10u16, 12, 13], vec![14, 15, 16], vec![17, 18, 19]);
         test_segment_data(vec![20u32, 22, 23], vec![24, 25, 26], vec![27, 28, 29]);
