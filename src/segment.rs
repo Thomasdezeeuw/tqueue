@@ -3,8 +3,15 @@ use std::{fmt, mem};
 
 use super::state::AtomicState;
 
-/// `SegmentData` is a piece of data that can be written to once and read once,
-/// and can then be reused.
+/// `SegmentData` is a piece of data that can be written to once and then read
+/// once, and can then be reused. It is not possible to overwrite the data or
+/// read the data twice.
+///
+/// It is made for, and therefore safe for, concurrent use if `T` is [`Send`]
+/// and [`Sync`].
+///
+/// [`Send`]: https://doc.rust-lang.org/nightly/core/marker/trait.Send.html
+/// [`Sync`]: https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html
 pub struct SegmentData<T> {
     /// The state of the data.
     state: AtomicState,
@@ -17,7 +24,7 @@ pub struct SegmentData<T> {
 }
 
 impl<T> SegmentData<T> {
-    /// Create new empty segment data.
+    /// Create new empty `SegmentData`.
     pub fn empty() -> SegmentData<T> {
         SegmentData {
             state: AtomicState::empty(),
@@ -25,20 +32,23 @@ impl<T> SegmentData<T> {
         }
     }
 
-    /// Check if the data is empty.
+    /// Check if the `SegmentData` is empty.
     pub fn is_empty(&self) -> bool {
         self.state.is_empty()
     }
 
-    /// Check if the data is ready for reading.
+    /// Check if the `SegmentData` is ready for reading.
     pub fn is_ready(&self) -> bool {
         self.state.is_ready()
     }
 
-    /// Write a value to the segment. This will return an error including the
-    /// value if the data can't be written, this can happen if segment is
-    /// currently not empty (this includes when the data is being read from or
-    /// written to).
+    /// Try to write a value to this `SegmentData`. If the state of this
+    /// `SegmentData` is not [`Empty`], this includes when the data is being
+    /// read from or written to, the value can't be written. If this is the case
+    /// this function will return an error, which includes the value so it can be
+    /// used in trying the write operation again.
+    ///
+    /// [`Empty`]: ../state/enum.State.html#variant.Empty
     pub fn try_write(&self, value: T) -> Result<(), T> {
         // Set the state to writing, if this returns false it means we can't
         // currently write the value and we'll return an error.
@@ -59,9 +69,12 @@ impl<T> SegmentData<T> {
         }
     }
 
-    /// Read the data from the current segment and remove it. After which the
-    /// segment will be empty. If the segment is already empty it will return
-    /// `None`.
+    /// Try to read the data from this `SegmentData` and remove it, after which
+    /// it will be empty. If the state is not [`Ready`], this includes when the
+    /// data is being read from or written to, the value can't be read. If
+    /// this is the case this function will return `None`.
+    ///
+    /// [`Ready`]: ../state/enum.State.html#variant.Ready
     pub fn try_pop(&self) -> Option<T> {
         // Set the state to reading, if this returns false it means we currently
         // can't read the value and we'll return `None`.
