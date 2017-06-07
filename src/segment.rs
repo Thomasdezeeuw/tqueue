@@ -89,6 +89,18 @@ impl<T> fmt::Debug for SegmentData<T> {
     }
 }
 
+impl<T> Default for SegmentData<T> {
+    /// Create an empty `SegmentData`, this does the same thing as
+    /// `SegmentData::empty`.
+    ///
+    /// # Note
+    ///
+    /// It does not use `T`'s default value as starting value.
+    fn default() -> SegmentData<T> {
+        SegmentData::empty()
+    }
+}
+
 unsafe impl<T: Send + Sync> Send for SegmentData<T> {}
 
 unsafe impl<T: Send + Sync> Sync for SegmentData<T> {}
