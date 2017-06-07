@@ -39,7 +39,7 @@ impl<T> SegmentData<T> {
     /// value if the data can't be written, this can happen if segment is
     /// currently not empty (this includes when the data is being read from or
     /// written to).
-    pub fn write(&self, value: T) -> Result<(), T> {
+    pub fn try_write(&self, value: T) -> Result<(), T> {
         // Set the state to writing, if this returns false it means we can't
         // currently write the value and we'll return an error.
         if self.state.set_writing() {
@@ -62,7 +62,7 @@ impl<T> SegmentData<T> {
     /// Read the data from the current segment and remove it. After which the
     /// segment will be empty. If the segment is already empty it will return
     /// `None`.
-    pub fn pop(&self) -> Option<T> {
+    pub fn try_pop(&self) -> Option<T> {
         // Set the state to reading, if this returns false it means we currently
         // can't read the value and we'll return `None`.
         if self.state.set_reading() {
@@ -125,7 +125,7 @@ mod tests {
         {
             let data = SegmentData::empty();
             {
-                assert!(data.write(DropTest(value.clone())).is_ok());
+                assert!(data.try_write(DropTest(value.clone())).is_ok());
             }
             // Should not be dropped yet.
             assert_eq!(*value.read().unwrap(), NoCopy(0));
@@ -145,10 +145,10 @@ mod tests {
         {
             let data = SegmentData::empty();
             {
-                assert!(data.write(DropTest(value.clone())).is_ok());
+                assert!(data.try_write(DropTest(value.clone())).is_ok());
             }
             {
-                let got_value = data.pop();
+                let got_value = data.try_pop();
                 // Should not be dropped yet.
                 assert_eq!(*value.read().unwrap(), NoCopy(1));
                 let got = &got_value.unwrap().0;
@@ -221,36 +221,36 @@ mod tests {
         let data = SegmentData::empty();
         assert!(data.is_empty());
         assert!(!data.is_ready());
-        assert!(data.pop().is_none());
+        assert!(data.try_pop().is_none());
 
         // Write some data.
-        assert!(data.write(value1.clone()).is_ok());
+        assert!(data.try_write(value1.clone()).is_ok());
         assert!(!data.is_empty());
         assert!(data.is_ready());
 
         // Shouldn't be able to write again.
-        assert!(data.write(err_value.clone()).is_err());
+        assert!(data.try_write(err_value.clone()).is_err());
 
         // Read (pop) the data.
-        let got1 = data.pop();
+        let got1 = data.try_pop();
         assert_eq!(got1, Some(value1.clone()));
         assert!(data.is_empty());
         assert!(!data.is_ready());
-        assert!(data.pop().is_none());
+        assert!(data.try_pop().is_none());
         assert!(data.is_empty());
         assert!(!data.is_ready());
 
         // Test reuseage:
 
         // Write and read some data again.
-        assert!(data.write(value2.clone()).is_ok());
+        assert!(data.try_write(value2.clone()).is_ok());
         assert!(!data.is_empty());
         assert!(data.is_ready());
-        let got2 = data.pop();
+        let got2 = data.try_pop();
         assert_eq!(got2, Some(value2.clone()));
         assert!(data.is_empty());
         assert!(!data.is_ready());
-        assert!(data.pop().is_none());
+        assert!(data.try_pop().is_none());
         assert!(data.is_empty());
         assert!(!data.is_ready());
 
