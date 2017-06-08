@@ -66,9 +66,11 @@ impl<T> SegmentData<T> {
         }
     }
 
-    /// This function does the same thing as `try_write`, however if `try_write`
-    /// returns an error this function will try it again until it succeeds or
-    /// until it tried `tries` many times.
+    /// This function does the same thing as [`try_write`], however if
+    /// [`try_write`] returns an error this function will try it again until it
+    /// succeeds or until it tried `tries` many times.
+    ///
+    /// [`try_write`]: struct.SegmentData.html#method.try_write
     pub fn write(&self, value: T, tries: usize) -> Result<(), T> {
         if tries == 0 {
             Err(value)
@@ -95,18 +97,18 @@ impl<T> SegmentData<T> {
     }
 
     /// Take the value without checking if the state is [`Ready`] and setting it
-    /// to [`Reading`], this is the callers responsibility. This is also the
+    /// to [`Reading`], **this is the callers responsibility**. This is also the
     /// reason why this function is unsafe.
     ///
     /// The state will be updated to [`Empty`] after taking the data.
     ///
     /// # Safety
     ///
-    /// The state must be set to `Reading` before calling this function, this is
+    /// The state must be set to [`Reading`] before calling this function, this is
     /// the reason this function is unsafe.
     ///
     /// [`Ready`]: ../state/enum.State.html#variant.Ready
-    /// [`Readng`]: ../state/enum.State.html#variant.Reading
+    /// [`Reading`]: ../state/enum.State.html#variant.Reading
     /// [`Empty`]: ../state/enum.State.html#variant.Empty
     unsafe fn take_data(&self) -> Option<T> {
         // Take the data and leave `None` in its place. This is safe because of
@@ -120,9 +122,11 @@ impl<T> SegmentData<T> {
         data
     }
 
-    /// This function does the same thing as `try_pop`, however if `try_pop`
+    /// This function does the same thing as [`try_pop`], however if [`try_pop`]
     /// returns `None` this function will try it again until it returns
     /// something or until it tried `tries` many times.
+    ///
+    /// [`try_pop`]: struct.SegmentData.html#method.try_pop
     pub fn pop(&self, tries: usize) -> Option<T> {
         if tries == 0 {
             None
