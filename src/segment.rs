@@ -134,6 +134,43 @@ impl<T> SegmentData<T> {
             self.try_pop().or_else(|| self.pop(tries - 1))
         }
     }
+
+    /// This is the same as [`try_pop`], however makes sure the returned data
+    /// fulfills the provided `predicate`. See [`try_pop`] for more.
+    ///
+    /// # Note
+    ///
+    /// The `predicate` function is called while blocking all other operations
+    /// on this `SegmentData`, thus is it advised to make sure the `predicate`
+    /// function doesn't take too long.
+    ///
+    /// [`try_pop`]: struct.SegmentData.html#method.try_pop
+    pub fn conditional_try_pop<F>(&self, predicate: F) -> Option<T>
+        where F: Fn(&T) -> bool
+    {
+        // Set the state to reading, if this returns false it means we currently
+        // can't read the value and we'll return `None`.
+        if self.state.set_reading() {
+            // Get a reference to the data for calling the predicate.
+            let data = unsafe {
+                // This is safe because of the contract described in the `data`
+                // field.
+                &*self.data.get()
+            }.as_ref().unwrap();
+
+            if predicate(data) {
+                // This is safe because we made sure the state is in `Reading`.
+                unsafe { self.take_data() }
+            } else {
+                // Revert the state to indicate the data is still present.
+                // TODO: what to do with this check.
+                assert!(self.state.return_ready());
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl<T> fmt::Debug for SegmentData<T> {
@@ -164,7 +201,7 @@ mod tests {
 
     use super::*;
 
-    #[derive(Eq, PartialEq, Debug, Clone)]
+    #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
     struct NoCopy(usize);
 
     struct DropTest(Arc<RwLock<NoCopy>>);
@@ -280,8 +317,9 @@ mod tests {
         test_segment_data(NoCopy(100), NoCopy(200), NoCopy(0));
     }
 
+    /// Required: `value1` > `value2` and `value2` > `value1`.
     fn test_segment_data<T>(value1: T, value2: T, err_value: T)
-        where T: Send + Sync + Clone + PartialEq + fmt::Debug
+        where T: Send + Sync + Clone + PartialEq + PartialOrd + fmt::Debug
     {
         const MAX_TRIES: usize = 5;
 
@@ -313,7 +351,11 @@ mod tests {
         assert!(data.write(value2.clone(), MAX_TRIES).is_ok());
         assert!(!data.is_empty());
         assert!(data.is_ready());
-        let got2 = data.try_pop();
+
+        // Predicate is not true.
+        assert!(data.conditional_try_pop(|value2| *value2 < value1).is_none());
+        // Predicate is true.
+        let got2 = data.conditional_try_pop(|value2| *value2 > value1);
         assert_eq!(got2, Some(value2.clone()));
         assert!(data.is_empty());
         assert!(!data.is_ready());

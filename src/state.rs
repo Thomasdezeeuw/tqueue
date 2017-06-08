@@ -96,6 +96,16 @@ impl AtomicState {
         self.swap_state(State::Ready, State::Reading)
     }
 
+    /// Return the state to [`Ready`] from a [`Reading`] state, returns true if
+    /// all is ok. However it returns false if the state is not set to
+    /// [`Ready`], which is the case if the current state is not [`Reading`].
+    ///
+    /// [`Ready`]: enum.State.html#variant.Ready
+    /// [`Reading`]: enum.State.html#variant.Reading
+    pub fn return_ready(&self) -> bool {
+        self.swap_state(State::Reading, State::Ready)
+    }
+
     /// Set the state to [`Empty`], returns true if all is ok. However it
     /// returns false if the state is not set to [`Empty`], which is the case if
     /// the current state is not [`Reading`].
@@ -141,5 +151,17 @@ mod tests {
         // Can't read now.
         assert!(!state.set_reading());
         assert!(!state.set_empty());
+
+        // Write to the data again.
+        assert!(state.set_writing());
+        assert!(state.set_ready());
+        assert!(!state.is_empty());
+        assert!(state.is_ready());
+
+        // Start reading, but then return to ready.
+        assert!(state.set_reading());
+        assert!(state.return_ready());
+        assert!(!state.is_empty());
+        assert!(state.is_ready());
     }
 }
