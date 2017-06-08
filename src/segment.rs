@@ -88,20 +88,36 @@ impl<T> SegmentData<T> {
         // Set the state to reading, if this returns false it means we currently
         // can't read the value and we'll return `None`.
         if self.state.set_reading() {
-            // Take the data and leave `None` in its place.
-            let value = unsafe {
-                // This is safe because of the contract described in the `data`
-                // field.
-                &mut *self.data.get()
-            }.take();
-
-            // Update the state to indicate the data is empty.
-            // TODO: what to do with this check.
-            assert!(self.state.set_empty());
-            value
+            unsafe { self.take_data() }
         } else {
             None
         }
+    }
+
+    /// Take the value without checking if the state is [`Ready`] and setting it
+    /// to [`Reading`], this is the callers responsibility. This is also the
+    /// reason why this function is unsafe.
+    ///
+    /// The state will be updated to [`Empty`] after taking the data.
+    ///
+    /// # Safety
+    ///
+    /// The state must be set to `Reading` before calling this function, this is
+    /// the reason this function is unsafe.
+    ///
+    /// [`Ready`]: ../state/enum.State.html#variant.Ready
+    /// [`Readng`]: ../state/enum.State.html#variant.Reading
+    /// [`Empty`]: ../state/enum.State.html#variant.Empty
+    unsafe fn take_data(&self) -> Option<T> {
+        // Take the data and leave `None` in its place. This is safe because of
+        // the contract described in the `data` field as well as the contract
+        // describe in the function documentation about the state.
+        let data = (&mut *self.data.get()).take();
+
+        // Update the state to indicate the data is empty.
+        // TODO: what to do with this check.
+        assert!(self.state.set_empty());
+        data
     }
 
     /// This function does the same thing as `try_pop`, however if `try_pop`
