@@ -128,11 +128,12 @@ impl<T> SegmentData<T> {
     ///
     /// [`try_pop`]: struct.SegmentData.html#method.try_pop
     pub fn pop(&self, tries: usize) -> Option<T> {
-        if tries == 0 {
-            None
-        } else {
-            self.try_pop().or_else(|| self.pop(tries - 1))
+        for _ in 0..tries {
+            if let Some(data) = self.try_pop() {
+                return Some(data);
+            }
         }
+        None
     }
 
     /// This is the same as [`try_pop`], however makes sure the returned data
