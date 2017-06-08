@@ -172,6 +172,27 @@ impl<T> SegmentData<T> {
             None
         }
     }
+
+    /// This function is what [`pop`] is to [`try_pop`], but for
+    /// [`conditional_try_pop`]. See those functions for more.
+    ///
+    /// [`pop`]: struct.SegmentData.html#method.pop
+    /// [`try_pop`]: struct.SegmentData.html#method.try_pop
+    /// [`conditional_try_pop`]: struct.SegmentData.html#method.conditional_try_pop
+    pub fn conditional_pop<F>(&self, predicate: F, tries: usize) -> Option<T>
+        where F: Fn(&T) -> bool
+    {
+        for _ in 0..tries {
+            // `conditional_try_pop` takes ownership of the predicate, so we
+            // need to create a little wrapper closure to make sure we can reuse
+            // the actual `predicate`.
+            let predicate = |data: &T| predicate(data);
+            if let Some(data) = self.conditional_try_pop(predicate) {
+                return Some(data);
+            }
+        }
+        None
+    }
 }
 
 impl<T> fmt::Debug for SegmentData<T> {
@@ -354,7 +375,7 @@ mod tests {
         assert!(data.is_ready());
 
         // Predicate is not true.
-        assert!(data.conditional_try_pop(|value2| *value2 < value1).is_none());
+        assert!(data.conditional_pop(|value2| *value2 < value1, MAX_TRIES).is_none());
         // Predicate is true.
         let got2 = data.conditional_try_pop(|value2| *value2 > value1);
         assert_eq!(got2, Some(value2.clone()));
