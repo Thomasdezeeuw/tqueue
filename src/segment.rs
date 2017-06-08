@@ -53,12 +53,9 @@ impl<T> SegmentData<T> {
         // Set the state to writing, if this returns false it means we can't
         // currently write the value and we'll return an error.
         if self.state.set_writing() {
-            let data = unsafe {
-                // This is safe because of the contract described in the `data`
-                // field.
-                &mut *self.data.get()
-            };
-            mem::replace(data, Some(value));
+            // This is safe because of the contract described in the `data`
+            // field.
+            mem::replace(unsafe { &mut *self.data.get() } , Some(value));
 
             // Update the `state` to indicate the data is `Ready`.
             // TODO: what to do with this check.
