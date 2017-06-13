@@ -42,27 +42,27 @@ impl<T> SegmentData<T> {
         self.state.is_ready()
     }
 
-    /// Try to write a value to this `SegmentData`. If the state of this
+    /// Try to write data to this `SegmentData`. If the state of this
     /// `SegmentData` is not [`Empty`], this includes when the data is being
-    /// read from or written to, the value can't be written. If this is the case
-    /// this function will return an error, which includes the value so it can be
+    /// read from or written to, the data can't be written. If this is the case
+    /// this function will return an error, which includes the data so it can be
     /// used in trying the write operation again.
     ///
     /// [`Empty`]: ../state/enum.State.html#variant.Empty
-    pub fn try_write(&self, value: T) -> Result<(), T> {
+    pub fn try_write(&self, data: T) -> Result<(), T> {
         // Set the state to writing, if this returns false it means we can't
-        // currently write the value and we'll return an error.
+        // currently write the data and we'll return an error.
         if self.state.set_writing() {
             // This is safe because of the contract described in the `data`
             // field.
-            mem::replace(unsafe { &mut *self.data.get() } , Some(value));
+            mem::replace(unsafe { &mut *self.data.get() } , Some(data));
 
             // Update the `state` to indicate the data is `Ready`.
             // TODO: what to do with this check.
             assert!(self.state.set_ready());
             Ok(())
         } else {
-            Err(value)
+            Err(data)
         }
     }
 
@@ -71,24 +71,24 @@ impl<T> SegmentData<T> {
     /// succeeds or until it tried `tries` many times.
     ///
     /// [`try_write`]: struct.SegmentData.html#method.try_write
-    pub fn write(&self, value: T, tries: usize) -> Result<(), T> {
+    pub fn write(&self, data: T, tries: usize) -> Result<(), T> {
         if tries == 0 {
-            Err(value)
+            Err(data)
         } else {
-            self.try_write(value)
-                .or_else(|value| self.write(value, tries - 1))
+            self.try_write(data)
+                .or_else(|data| self.write(data, tries - 1))
         }
     }
 
     /// Try to read the data from this `SegmentData` and remove it, after which
     /// it will be empty. If the state is not [`Ready`], this includes when the
-    /// data is being read from or written to, the value can't be read. If
+    /// data is being read from or written to, the data can't be read. If
     /// this is the case this function will return `None`.
     ///
     /// [`Ready`]: ../state/enum.State.html#variant.Ready
     pub fn try_pop(&self) -> Option<T> {
         // Set the state to reading, if this returns false it means we currently
-        // can't read the value and we'll return `None`.
+        // can't read the data and we'll return `None`.
         if self.state.set_reading() {
             unsafe { self.take_data() }
         } else {
@@ -96,7 +96,7 @@ impl<T> SegmentData<T> {
         }
     }
 
-    /// Take the value without checking if the state is [`Ready`] and setting it
+    /// Take the data without checking if the state is [`Ready`] and setting it
     /// to [`Reading`], **this is the callers responsibility**. This is also the
     /// reason why this function is unsafe.
     ///
@@ -150,7 +150,7 @@ impl<T> SegmentData<T> {
         where F: Fn(&T) -> bool
     {
         // Set the state to reading, if this returns false it means we currently
-        // can't read the value and we'll return `None`.
+        // can't read the data and we'll return `None`.
         if self.state.set_reading() {
             // Get a reference to the data for calling the predicate.
             let data = unsafe {
