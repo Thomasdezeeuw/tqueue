@@ -25,8 +25,8 @@ pub enum State {
 /// states.
 ///
 /// A typical lifecycle of the state will be: [`Empty`][] (initial) ->
-/// [`Writing`] -> [`Ready`] -> [`Reading`] -> [`Ready`] -> [`Writing`] ->
-/// [`Empty`], and can be reused at that point.
+/// [`Writing`] -> [`Ready`] -> [`Reading`] -> [`Empty`], and at this point the
+/// state can be reused.
 ///
 /// [`State`]: enum.State.html
 /// [`Empty`]: enum.State.html#variant.Empty
