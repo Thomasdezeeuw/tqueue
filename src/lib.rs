@@ -40,8 +40,11 @@ mod assertions {
         assert_sync::<SegmentData<u64>>();
         assert_debug::<SegmentData<u64>>();
 
-        // Size of `AtomicState` + the size of an option of `u64`.
-        let want = mem::size_of::<AtomicState>() + mem::size_of::<Option<u64>>();
+        // 8 or 4 for the state, 8 bytes for the Option, 8 for u64 (the data).
+        #[cfg(target_pointer_width = "64")]
+        let want = 8 + 8 + 8;
+        #[cfg(target_pointer_width = "32")]
+        let want = 4 + 8 + 8;
         assert_size::<SegmentData<u64>>(want);
     }
 }
