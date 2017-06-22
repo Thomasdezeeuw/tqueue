@@ -51,6 +51,8 @@ impl AtomicState {
     /// Check if the current state is [`Empty`].
     ///
     /// [`Empty`]: enum.State.html#variant.Empty
+    #[cfg(test)]
+    #[doc(hidden)]
     pub fn is_empty(&self) -> bool {
         self.is_in_state(State::Empty)
     }

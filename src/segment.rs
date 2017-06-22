@@ -489,7 +489,8 @@ impl<T> SegmentData<T> {
     }
 
     /// Check if the `SegmentData` is empty.
-    pub fn is_empty(&self) -> bool {
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
         self.state.is_empty()
     }
 
