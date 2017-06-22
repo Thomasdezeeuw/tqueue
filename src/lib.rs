@@ -4,6 +4,7 @@ mod queue;
 mod segment;
 mod state;
 
+pub use queue::Queue;
 
 // TODO: try to relax the ordering, on a per call basis.
 const DEFAULT_ORDERING: Ordering = Ordering::SeqCst;
