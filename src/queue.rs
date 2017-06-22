@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::atomic::{AtomicPtr, AtomicIsize, Ordering};
 
 use super::segment::Segment;
@@ -140,5 +141,11 @@ impl<T> Drop for Queue<T> {
             let (_, next_head_next) = segment_next.get_peers();
             head_next = next_head_next;
         }
+    }
+}
+
+impl<T> fmt::Debug for Queue<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.pad("Queue{{ ... }}")
     }
 }
