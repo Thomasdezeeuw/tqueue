@@ -30,6 +30,7 @@ mod assertions {
         assert_sync::<AtomicState>();
         assert_debug::<AtomicState>();
 
+        // Just a atomic usize.
         #[cfg(target_pointer_width = "64")]
         let want = 8;
         #[cfg(target_pointer_width = "32")]
@@ -56,9 +57,6 @@ mod assertions {
         assert_send::<Segment<u64>>();
         assert_sync::<Segment<u64>>();
         assert_debug::<Segment<u64>>();
-
-        // TODO: make the assertions below more static, so they complain when
-        // something changes.
 
         // 8 bytes for the id, `SEGMENT_SIZE` * `SegmentData`, 2x pointers.
         #[cfg(target_pointer_width = "64")]
