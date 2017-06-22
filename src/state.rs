@@ -48,6 +48,8 @@ impl AtomicState {
         }
     }
 
+    // TODO: make `is_empty` and `is_ready` only visible to this crate.
+
     /// Check if the current state is [`Empty`].
     ///
     /// [`Empty`]: enum.State.html#variant.Empty
@@ -60,10 +62,13 @@ impl AtomicState {
     /// Check if the current state is [`Ready`].
     ///
     /// [`Ready`]: enum.State.html#variant.Ready
+    #[cfg(test)]
+    #[doc(hidden)]
     pub fn is_ready(&self) -> bool {
         self.is_in_state(State::Ready)
     }
 
+    #[cfg(test)]
     fn is_in_state(&self, state: State) -> bool {
         self.state.load(DEFAULT_ORDERING) == state as usize
     }

@@ -495,7 +495,8 @@ impl<T> SegmentData<T> {
     }
 
     /// Check if the `SegmentData` is ready for reading.
-    pub fn is_ready(&self) -> bool {
+    #[cfg(test)]
+    fn is_ready(&self) -> bool {
         self.state.is_ready()
     }
 
