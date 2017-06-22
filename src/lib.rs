@@ -1,5 +1,6 @@
 use std::sync::atomic::Ordering;
 
+mod queue;
 mod segment;
 mod state;
 
