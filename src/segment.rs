@@ -146,8 +146,8 @@ impl<T> SegmentData<T> {
     /// function doesn't take too long.
     ///
     /// [`try_pop`]: struct.SegmentData.html#method.try_pop
-    pub fn conditional_try_pop<F>(&self, predicate: F) -> Option<T>
-        where F: Fn(&T) -> bool
+    pub fn conditional_try_pop<P>(&self, predicate: P) -> Option<T>
+        where P: Fn(&T) -> bool
     {
         // Set the state to reading, if this returns false it means we currently
         // can't read the data and we'll return `None`.
@@ -179,8 +179,8 @@ impl<T> SegmentData<T> {
     /// [`pop`]: struct.SegmentData.html#method.pop
     /// [`try_pop`]: struct.SegmentData.html#method.try_pop
     /// [`conditional_try_pop`]: struct.SegmentData.html#method.conditional_try_pop
-    pub fn conditional_pop<F>(&self, predicate: F, tries: usize) -> Option<T>
-        where F: Fn(&T) -> bool
+    pub fn conditional_pop<P>(&self, predicate: P, tries: usize) -> Option<T>
+        where P: Fn(&T) -> bool
     {
         for _ in 0..tries {
             // `conditional_try_pop` takes ownership of the predicate, so we
