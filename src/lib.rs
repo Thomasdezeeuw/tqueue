@@ -1,6 +1,5 @@
 use std::sync::atomic::Ordering;
 
-mod pos;
 mod segment;
 mod state;
 
@@ -12,7 +11,6 @@ const DEFAULT_ORDERING: Ordering = Ordering::SeqCst;
 mod assertions {
     use std::{fmt, mem};
 
-    use super::pos::AtomicPos;
     use super::state::AtomicState;
     use super::segment::SegmentData;
 
@@ -34,19 +32,6 @@ mod assertions {
         #[cfg(target_pointer_width = "32")]
         let want = 4;
         assert_size::<AtomicState>(want);
-    }
-
-    #[test]
-    fn atomic_pos() {
-        assert_send::<AtomicPos>();
-        assert_sync::<AtomicPos>();
-        assert_debug::<AtomicPos>();
-
-        #[cfg(target_pointer_width = "64")]
-        let want = 8;
-        #[cfg(target_pointer_width = "32")]
-        let want = 4;
-        assert_size::<AtomicPos>(want);
     }
 
     #[test]
