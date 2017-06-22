@@ -2,17 +2,3 @@
 name = "tqueue"
 version = "0.1.0"
 authors = ["Thomas de Zeeuw <thomasdezeeuw@gmail.com>"]
-
-[profile.release]
-opt-level = 3
-debug = false
-lto = true
-debug-assertions = false
-
-# Test with almost the same options as a release.
-[profile.test]
-opt-level = 3
-debug = true
-lto = true
-debug-assertions = true
-panic = 'unwind'
