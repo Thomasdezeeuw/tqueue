@@ -1,7 +1,463 @@
 use std::cell::UnsafeCell;
-use std::{fmt, mem};
+use std::default::Default;
+use std::sync::atomic::{AtomicPtr, AtomicIsize, Ordering};
+use std::{fmt, mem, ptr};
 
+use super::DEFAULT_ORDERING;
 use super::state::AtomicState;
+
+/// The size of a single [`Segment`]. 32 is chosen somewhat arbitrarily.
+///
+/// [`Segment`]: struct.Segment.html
+//
+// TODO: benchmark smaller and bigger sizes.
+pub const SEGMENT_SIZE: usize = 32;
+
+/// The maximum number of tries before the operation given up.
+const MAX_TRIES: usize = 10;
+
+/// The id of a [`Segment`].
+///
+/// [`Segment`]: struct.Segment.html
+type SegmentId = isize;
+
+/// The position of a `SegmentData` in the data array in `Segment`.
+///
+/// [`SegmentData`]: struct.SegmentData.html
+type Pos = isize;
+
+// Does not drop it the pointers to next and previous segments.
+//
+// TODO: make pub(crate), unstable feature.
+pub struct Segment<T> {
+    /// The `SegmentId` of the `Segment` used in determining to which `Segment`
+    /// data must be written or read from.
+    id: SegmentId,
+
+    /// The data this segment is responible for. Due to the nature of the global
+    /// position (see `push_front` and `push_back`) it is very possible that
+    /// this will contain holes.
+    ///
+    // TODO: doc data fragmentation more.
+    data: [SegmentData<T>; SEGMENT_SIZE],
+
+    /// The pointers to the next and previous `Segment`s.
+    ///
+    /// For the initial Segment these pointers wil be null, but after it set
+    /// once it must always point to a correct `Segment` and **must never be
+    /// null again**!
+    prev: AtomicPtr<Segment<T>>,
+    next: AtomicPtr<Segment<T>>,
+}
+
+impl<T> Segment<T> {
+    /// Create new empty `Segment`.
+    //
+    // TODO: doc box required for functions.
+    pub fn empty() -> Box<Segment<T>> {
+        Box::new(Segment {
+            id: 0,
+            // Creates an array of empty `SegmentData`.
+            data: Default::default(),
+            prev: AtomicPtr::new(ptr::null_mut()),
+            next: AtomicPtr::new(ptr::null_mut()),
+        })
+    }
+
+    /// Push `data` to the front of the `Segment`.
+    pub fn push_front(&self, head_pos: &AtomicIsize, data: T) -> Result<(), T> {
+        // Grab a new position for ourself and try to write to it.
+        //
+        // Note we don't have exclusive access to it so we're still racing for
+        // it, hence the fact that `SegmentData` has it's own access control.
+        let pos = head_pos.fetch_sub(1, DEFAULT_ORDERING);
+        self.write_position(pos, data)
+            .map_err(|data| {
+                // Failed to write, release the position.
+                head_pos.fetch_add(1, DEFAULT_ORDERING);
+                // FIXME: it could also be that a `SegmentData` is (currently)
+                // in a invalid state, what then?
+                data
+            })
+    }
+
+    /// Push `data` to the back of the `Segment`.
+    pub fn push_back(&self, tail_pos: &AtomicIsize, data: T) -> Result<(), T> {
+        // See `push_front` for documentation, this does the same thing but with
+        // a different position and returned error.
+        let pos = tail_pos.fetch_add(1, DEFAULT_ORDERING);
+        self.write_position(pos, data)
+            .map_err(|data| {
+                tail_pos.fetch_sub(1, DEFAULT_ORDERING);
+                data
+            })
+    }
+
+    /// Write the provided `data` to the provided position.
+    ///
+    /// # Note
+    ///
+    /// It possible that the position is not present on the current segment, if
+    /// that is the case this function will deligate the writing to the correct
+    /// segment, if present.
+    ///
+    /// If the segment to which the position belongs doesn't exitsts this will
+    /// return an error.
+    fn write_position(&self, pos: Pos, data: T) -> Result<(), T> {
+        // Get the `SegmentId` based on the `Pos`ition in which this data must
+        // be written.
+        //
+        // TODO: call get_segment_id only once per write.
+        let segment_id = get_segment_id(pos);
+        if segment_id == self.id {
+            // If its this segment we can get the index and write to it.
+            let index = pos_to_index(pos);
+            self.data[index].write(data, MAX_TRIES)
+        } else if segment_id < self.id {
+            // Otherwise we need to pass the write on to the `prev`ious or
+            // `next` segment.
+            write_position(&self.prev, pos, data)
+        } else {
+            write_position(&self.next, pos, data)
+        }
+    }
+
+    pub fn pop_front(&self, head_pos: &AtomicIsize) -> Option<T> {
+        // Grab a new position for ourself and try to read from it.
+        //
+        // Note we don't have exclusive access to it so we're still racing for
+        // it, hence the fact that `SegmentData` has it's own access control.
+        let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
+        self.pop_position(pos)
+            .or_else(|| {
+                // Failed to read, release the position.
+                head_pos.fetch_sub(1, DEFAULT_ORDERING);
+                // FIXME: it could also be that a `SegmentData` is (currently)
+                // in a invalid state, what then?
+                None
+            })
+    }
+
+    pub fn pop_back(&self, tail_pos: &AtomicIsize) -> Option<T> {
+        // See `pop_front` for documentation, this does the same thing but with
+        // a different position.
+        let pos = tail_pos.fetch_sub(1, DEFAULT_ORDERING);
+        self.pop_position(pos)
+            .or_else(|| {
+                tail_pos.fetch_add(1, DEFAULT_ORDERING);
+                None
+            })
+    }
+
+    /// Pop the `data` in the provided position.
+    ///
+    /// # Note
+    ///
+    /// It possible that the position is not present on the current segment, if
+    /// that is the case this function will deligate the writing to the correct
+    /// segment, if present.
+    ///
+    /// If the segment to which the position belongs doesn't exitsts this will
+    /// return `None`.
+    fn pop_position(&self, pos: Pos) -> Option<T> {
+        // Get the `SegmentId` based on the `Pos`ition in which this data must
+        // be written.
+        //
+        // TODO: call get_segment_id only once per read.
+        let segment_id = get_segment_id(pos);
+        if segment_id == self.id {
+            // If its this segment we can get the index and write to it.
+            let index = pos_to_index(pos);
+            self.data[index].pop(MAX_TRIES)
+        } else if segment_id < self.id {
+            // Otherwise we need to pass the read on to the `prev`ious or
+            // `next` segment.
+            pop_position(&self.prev, pos)
+        } else {
+            pop_position(&self.next, pos)
+        }
+    }
+
+    pub fn conditional_pop_front<P>(&self, head_pos: &AtomicIsize, predicate: P) -> Option<T>
+        where P: Fn(&T) -> bool
+    {
+        // Grab a new position for ourself and try to read from it.
+        //
+        // Note we don't have exclusive access to it so we're still racing for
+        // it, hence the fact that `SegmentData` has it's own access control.
+        let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
+        self.conditional_pop_position(pos, predicate)
+            .or_else(|| {
+                // Failed to read, release the position.
+                head_pos.fetch_sub(1, DEFAULT_ORDERING);
+                // FIXME: it could also be that a `SegmentData` is (currently)
+                // in a invalid state, what then?
+                None
+            })
+    }
+
+    pub fn conditional_pop_back<P>(&self, tail_pos: &AtomicIsize, predicate: P) -> Option<T>
+        where P: Fn(&T) -> bool
+    {
+        // See `conditional_pop_front` for documentation, this does the same thing but with
+        // a different position.
+        let pos = tail_pos.fetch_sub(1, DEFAULT_ORDERING);
+        self.conditional_pop_position(pos, predicate)
+            .or_else(|| {
+                tail_pos.fetch_add(1, DEFAULT_ORDERING);
+                None
+            })
+    }
+
+    /// Pop the `data` in the provided position, if the `predicate` is met.
+    ///
+    /// # Note
+    ///
+    /// It possible that the position is not present on the current segment, if
+    /// that is the case this function will deligate the writing to the correct
+    /// segment, if present.
+    ///
+    /// If the segment to which the position belongs doesn't exitsts this will
+    /// return `None`.
+    fn conditional_pop_position<P>(&self, pos: Pos, predicate: P) -> Option<T>
+        where P: Fn(&T) -> bool
+    {
+        // Get the `SegmentId` based on the `Pos`ition in which this data must
+        // be written.
+        //
+        // TODO: call get_segment_id only once per read.
+        let segment_id = get_segment_id(pos);
+        if segment_id == self.id {
+            // If its this segment we can get the index and write to it.
+            let index = pos_to_index(pos);
+            self.data[index].conditional_pop(predicate, MAX_TRIES)
+        } else if segment_id < self.id {
+            // Otherwise we need to pass the read on to the `prev`ious or
+            // `next` segment.
+            conditional_pop_position(&self.prev, pos, predicate)
+        } else {
+            conditional_pop_position(&self.next, pos, predicate)
+        }
+    }
+
+    // Returns the pointer to the new tail segment.
+    // Needs to be called on a box.
+    //
+    // Returns Some if a new segment was added, else None if it already had an
+    // segment.
+    //
+    // return pointer will always be from Box::into_raw()
+    //
+    // MUST BE CALLED FROM BOX!!
+    //
+    // TODO: doc.
+    pub unsafe fn expand_front(&self) -> Option<*mut Segment<T>> {
+        if self.prev.load(DEFAULT_ORDERING).is_null() {
+            let ptr = Segment::expand_front_with_segment(&self, Segment::empty());
+            Some(ptr)
+        } else {
+            None
+        }
+    }
+
+    /// Expand the current segment with the provided segment.
+    ///
+    /// # Note
+    ///
+    /// When this function returns it will always have a segment in `self.prev`,
+    /// however it may be a different segment then the one provided.
+    ///
+    /// **This function must be called on a box**.
+    unsafe fn expand_front_with_segment(&self, mut new_segment: Box<Segment<T>>) -> *mut Segment<T> {
+        // For an `AtomicPtr` we need `*mut Segment<T>`, or a mutable raw
+        // pointer to a `Segment`. But since we don't even use a mutable
+        // reference (`&mut`) for any method, we can make do with a raw pointer
+        // (`*const`). So we cast a raw pointer into a raw mutable pointer and
+        // pass that to `AtomicPtr`.
+        //
+        // With the raw mutable pointer we set the correct `next` pointer on the
+        // `new_segment` and set the correct id.
+        let self_ptr: *const Segment<T> = &*self;
+        new_segment.next = AtomicPtr::new(self_ptr as *mut Segment<T>);
+        new_segment.id = self.id - 1;
+
+        // Make sure the current `prev` ptr is null and we don't overwrite any
+        // segments.
+        let result = self.prev.compare_exchange(ptr::null_mut(), &mut *new_segment,
+            DEFAULT_ORDERING, Ordering::Relaxed);
+        if let Err(prev_ptr) = result {
+            // So unfortunately a new segment was already allocated and added to
+            // the current one.
+            //
+            // Now we have two choices:
+            // 1) do nothing, the current segment has a segment after all, or
+            // 2) add the new segment to the next segment, so we don't waste the
+            //    allocation.
+            //
+            // We'll go with option two.
+
+            // We already made sure the pointer is valid, so this is safe to
+            // convert in to a `&Segment`.
+            // It is to call `expand_front_with_segment` with the `prev_ptr`
+            // because it is already on the heap.
+            Segment::expand_front_with_segment(&*prev_ptr, new_segment)
+        } else {
+            // All is ok and we added the segment to the current segment.
+            //
+            // Now we need to forget about `new_segment` and return a raw
+            // pointer to it.
+            Box::into_raw(new_segment)
+        }
+    }
+
+    /// See `expand_front` for docs. This does the same thing but adding a new
+    /// `Segment` to the back.
+    pub unsafe fn expand_back(&self) -> Option<*mut Segment<T>> {
+        if self.next.load(DEFAULT_ORDERING).is_null() {
+            let ptr = Segment::expand_back_with_segment(&self, Segment::empty());
+            Some(ptr)
+        } else {
+            None
+        }
+    }
+
+    /// See `expand_front_with_segment`.
+    unsafe fn expand_back_with_segment(&self, mut new_segment: Box<Segment<T>>) -> *mut Segment<T> {
+        // See `expand_front_with_segment` for docs.
+        let self_ptr: *const Segment<T> = &*self;
+        new_segment.prev = AtomicPtr::new(self_ptr as *mut Segment<T>);
+        new_segment.id = self.id + 1;
+
+        let result = self.next.compare_exchange(ptr::null_mut(), &mut *new_segment,
+            DEFAULT_ORDERING, Ordering::Relaxed);
+        if let Err(next_ptr) = result {
+            Segment::expand_back_with_segment(&*next_ptr, new_segment)
+        } else {
+            Box::into_raw(new_segment)
+        }
+    }
+
+    /// Get the current `prev`ious and `next` raw pointers. If these are not
+    /// null they will always point to valid memory.
+    ///
+    /// # Note
+    ///
+    /// This method may only be called when dropping it, hence the fact that it
+    /// moves itself.
+    #[doc(hidden)]
+    pub fn get_peers(self) -> (*mut Segment<T>, *mut Segment<T>) {
+        let prev = self.prev.load(Ordering::Relaxed);
+        let next = self.next.load(Ordering::Relaxed);
+        (prev, next)
+    }
+}
+
+// TODO: benchmark inlining (using the attribute) of these functions:
+
+/// Determine the `SegmentId` based on the `Pos`ition.
+fn get_segment_id(pos: Pos) -> SegmentId {
+    if pos == 0 {
+        0
+    } else if pos.is_negative() {
+        // Slot 0 starts at 0, so Slot -1 starts at -SEGMENT_SIZE.
+        -((pos / SEGMENT_SIZE as isize) - 1)
+    } else {
+        pos / SEGMENT_SIZE as isize
+    }
+}
+
+/// Converts a `Pos`ition into an index for the data array.
+fn pos_to_index(pos: Pos) -> usize {
+    let index = pos % SEGMENT_SIZE as isize;
+    if index.is_negative() {
+        -index as usize
+    } else {
+        index as usize
+    }
+}
+
+/// Call `segment.write_position` if the pointer points to a valid `Segment`,
+/// else returns an error.
+///
+/// # Note
+///
+/// The provided pointer must follow the contract defined in the `Segment.{next,
+/// prev}` fields.
+fn write_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, data: T) -> Result<(), T> {
+    let segment = unsafe {
+        // This is safe because the `previous` and `next` pointers must always
+        // point to a valid segment, if not null.
+        ptr.load(DEFAULT_ORDERING).as_ref()
+            .map(|segment_ptr| &*segment_ptr)
+    };
+
+    if let Some(segment) = segment {
+        // the next or previous segment exists and we'll let it deal with the
+        // write.
+        segment.write_position(pos, data)
+    } else {
+        // A next or previous segment doesn't exists, so we return an error.
+        Err(data)
+    }
+}
+
+/// Call `segment.pop_position` if the pointer points to a valid `Segment`, else
+/// returns `None`.
+///
+/// # Note
+///
+/// The provided pointer must follow the contract defined in the `Segment.{next,
+/// prev}` fields.
+fn pop_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos) -> Option<T> {
+    let segment = unsafe {
+        // This is safe because the `previous` and `next` pointers must always
+        // point to a valid segment, if not null.
+        ptr.load(DEFAULT_ORDERING).as_ref()
+            .map(|segment_ptr| &*segment_ptr)
+    };
+
+    if let Some(segment) = segment {
+        // the next or previous segment exists and we'll let it deal with the
+        // write.
+        segment.pop_position(pos)
+    } else {
+        // A next or previous segment doesn't exists.
+        None
+    }
+}
+
+/// Call `segment.conditional_pop_position` if the pointer points to a valid
+/// `Segment`, else returns `None`.
+///
+/// # Note
+///
+/// The provided pointer must follow the contract defined in the `Segment.{next,
+/// prev}` fields.
+fn conditional_pop_position<P, T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, predicate: P) -> Option<T>
+    where P: Fn(&T) -> bool
+{
+    let segment = unsafe {
+        // This is safe because the `previous` and `next` pointers must always
+        // point to a valid segment, if not null.
+        ptr.load(DEFAULT_ORDERING).as_ref()
+            .map(|segment_ptr| &*segment_ptr)
+    };
+
+    if let Some(segment) = segment {
+        // the next or previous segment exists and we'll let it deal with the
+        // write.
+        segment.conditional_pop_position(pos, predicate)
+    } else {
+        // A next or previous segment doesn't exists.
+        None
+    }
+}
+
+impl<T> fmt::Debug for Segment<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.pad("Segment{{ ... }}")
+    }
+}
 
 /// `SegmentData` is a piece of data that can be written to once and then read
 /// once, and can then be reused. It is not possible to overwrite the data or
