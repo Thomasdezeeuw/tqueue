@@ -1,6 +1,4 @@
-use std::sync::atomic::AtomicUsize;
-
-use super::DEFAULT_ORDERING;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A state for a segment of data, for an concurrent version see
 /// [`AtomicState`].
@@ -70,7 +68,7 @@ impl AtomicState {
 
     #[cfg(test)]
     fn is_in_state(&self, state: State) -> bool {
-        self.state.load(DEFAULT_ORDERING) == state as usize
+        self.state.load(Ordering::Relaxed) == state as usize
     }
 
     /// Set the state to [`Writing`], returns true if all is ok. However it
@@ -125,7 +123,7 @@ impl AtomicState {
 
     fn swap_state(&self, current: State, next: State) -> bool {
         self.state.compare_exchange(current as usize, next as usize,
-            DEFAULT_ORDERING, DEFAULT_ORDERING).is_ok()
+            Ordering::SeqCst, Ordering::Relaxed).is_ok()
     }
 }
 
