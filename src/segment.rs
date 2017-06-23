@@ -18,9 +18,9 @@ pub const SEGMENT_SIZE: usize = 32;
 /// [`Segment`]: struct.Segment.html
 type SegmentId = isize;
 
-/// The position of a `SegmentData` in the data array in `Segment`.
+/// The position of a `Item` in the data array in `Segment`.
 ///
-/// [`SegmentData`]: struct.SegmentData.html
+/// [`Item`]: struct.Item.html
 type Pos = isize;
 
 // Does not drop it the pointers to next and previous segments.
@@ -36,7 +36,7 @@ pub struct Segment<T> {
     /// this will contain holes.
     ///
     // TODO: doc data fragmentation more.
-    data: [SegmentData<T>; SEGMENT_SIZE],
+    data: [Item<T>; SEGMENT_SIZE],
 
     /// The pointers to the next and previous `Segment`s.
     ///
@@ -53,7 +53,7 @@ impl<T> Segment<T> {
     pub fn empty() -> Box<Segment<T>> {
         Box::new(Segment {
             id: 0,
-            // Creates an array of empty `SegmentData`.
+            // Creates an array of empty `Item`.
             data: Default::default(),
             prev: AtomicPtr::new(ptr::null_mut()),
             next: AtomicPtr::new(ptr::null_mut()),
@@ -65,13 +65,13 @@ impl<T> Segment<T> {
         // Grab a new position for ourself and try to write to it.
         //
         // Note we don't have exclusive access to it so we're still racing for
-        // it, hence the fact that `SegmentData` has it's own access control.
+        // it, hence the fact that `Item` has it's own access control.
         let pos = head_pos.fetch_sub(1, DEFAULT_ORDERING);
         self.try_write_position(pos, data)
             .map_err(|data| {
                 // Failed to write, release the position.
                 head_pos.fetch_add(1, DEFAULT_ORDERING);
-                // FIXME: it could also be that a `SegmentData` is (currently)
+                // FIXME: it could also be that a `Item` is (currently)
                 // in a invalid state, what then?
                 data
             })
@@ -122,13 +122,13 @@ impl<T> Segment<T> {
         // Grab a new position for ourself and try to read from it.
         //
         // Note we don't have exclusive access to it so we're still racing for
-        // it, hence the fact that `SegmentData` has it's own access control.
+        // it, hence the fact that `Item` has it's own access control.
         let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
         self.try_pop_position(pos)
             .or_else(|| {
                 // Failed to read, release the position.
                 head_pos.fetch_sub(1, DEFAULT_ORDERING);
-                // FIXME: it could also be that a `SegmentData` is (currently)
+                // FIXME: it could also be that a `Item` is (currently)
                 // in a invalid state, what then?
                 None
             })
@@ -180,13 +180,13 @@ impl<T> Segment<T> {
         // Grab a new position for ourself and try to read from it.
         //
         // Note we don't have exclusive access to it so we're still racing for
-        // it, hence the fact that `SegmentData` has it's own access control.
+        // it, hence the fact that `Item` has it's own access control.
         let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
         self.conditional_try_pop_position(pos, predicate)
             .or_else(|| {
                 // Failed to read, release the position.
                 head_pos.fetch_sub(1, DEFAULT_ORDERING);
-                // FIXME: it could also be that a `SegmentData` is (currently)
+                // FIXME: it could also be that a `Item` is (currently)
                 // in a invalid state, what then?
                 None
             })
@@ -455,7 +455,7 @@ impl<T> fmt::Debug for Segment<T> {
     }
 }
 
-/// `SegmentData` is a piece of data that can be written to once and then read
+/// `Item` is a piece of data that can be written to once and then read
 /// once, and can then be reused. It is not possible to overwrite the data or
 /// read the data twice.
 ///
@@ -464,7 +464,7 @@ impl<T> fmt::Debug for Segment<T> {
 ///
 /// [`Send`]: https://doc.rust-lang.org/nightly/core/marker/trait.Send.html
 /// [`Sync`]: https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html
-pub struct SegmentData<T> {
+pub struct Item<T> {
     /// The state of the data.
     state: AtomicState,
 
@@ -475,29 +475,29 @@ pub struct SegmentData<T> {
     data: UnsafeCell<Option<T>>,
 }
 
-impl<T> SegmentData<T> {
-    /// Create new empty `SegmentData`.
-    pub fn empty() -> SegmentData<T> {
-        SegmentData {
+impl<T> Item<T> {
+    /// Create new empty `Item`.
+    pub fn empty() -> Item<T> {
+        Item {
             state: AtomicState::empty(),
             data: UnsafeCell::new(None),
         }
     }
 
-    /// Check if the `SegmentData` is empty.
+    /// Check if the `Item` is empty.
     #[cfg(test)]
     fn is_empty(&self) -> bool {
         self.state.is_empty()
     }
 
-    /// Check if the `SegmentData` is ready for reading.
+    /// Check if the `Item` is ready for reading.
     #[cfg(test)]
     fn is_ready(&self) -> bool {
         self.state.is_ready()
     }
 
-    /// Try to write data to this `SegmentData`. If the state of this
-    /// `SegmentData` is not [`Empty`], this includes when the data is being
+    /// Try to write data to this `Item`. If the state of this
+    /// `Item` is not [`Empty`], this includes when the data is being
     /// read from or written to, the data can't be written. If this is the case
     /// this function will return an error, which includes the data so it can be
     /// used in trying the write operation again.
@@ -520,7 +520,7 @@ impl<T> SegmentData<T> {
         }
     }
 
-    /// Try to read the data from this `SegmentData` and remove it, after which
+    /// Try to read the data from this `Item` and remove it, after which
     /// it will be empty. If the state is not [`Ready`], this includes when the
     /// data is being read from or written to, the data can't be read. If
     /// this is the case this function will return `None`.
@@ -568,10 +568,10 @@ impl<T> SegmentData<T> {
     /// # Note
     ///
     /// The `predicate` function is called while blocking all other operations
-    /// on this `SegmentData`, thus is it advised to make sure the `predicate`
+    /// on this `Item`, thus is it advised to make sure the `predicate`
     /// function doesn't take too long.
     ///
-    /// [`try_pop`]: struct.SegmentData.html#method.try_pop
+    /// [`try_pop`]: struct.Item.html#method.try_pop
     pub fn conditional_try_pop<P>(&self, predicate: P) -> Option<T>
         where P: Fn(&T) -> bool
     {
@@ -600,27 +600,27 @@ impl<T> SegmentData<T> {
     }
 }
 
-impl<T> fmt::Debug for SegmentData<T> {
+impl<T> fmt::Debug for Item<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.pad("SegmentData{{ ... }}")
+        f.pad("Item{{ ... }}")
     }
 }
 
-impl<T> Default for SegmentData<T> {
-    /// Create an empty `SegmentData`, this does the same thing as
-    /// `SegmentData::empty`.
+impl<T> Default for Item<T> {
+    /// Create an empty `Item`, this does the same thing as
+    /// `Item::empty`.
     ///
     /// # Note
     ///
     /// It does not use `T`'s default value as starting value.
-    fn default() -> SegmentData<T> {
-        SegmentData::empty()
+    fn default() -> Item<T> {
+        Item::empty()
     }
 }
 
-unsafe impl<T: Send + Sync> Send for SegmentData<T> {}
+unsafe impl<T: Send + Sync> Send for Item<T> {}
 
-unsafe impl<T: Send + Sync> Sync for SegmentData<T> {}
+unsafe impl<T: Send + Sync> Sync for Item<T> {}
 
 #[cfg(test)]
 mod tests {
@@ -641,18 +641,18 @@ mod tests {
     }
 
     #[test]
-    fn segment_data_drop_test() {
+    fn item_drop_test() {
         let value = Arc::new(RwLock::new(NoCopy(0)));
 
-        test_drop_empty_segment_data();
-        test_drop_filled_segment_data(value.clone());
-        test_drop_after_poping_segment_data(value.clone());
+        test_drop_empty_item();
+        test_drop_filled_item(value.clone());
+        test_drop_after_poping_item(value.clone());
         assert_eq!(*value.read().unwrap(), NoCopy(2));
     }
 
-    fn test_drop_filled_segment_data(value: Arc<RwLock<NoCopy>>) {
+    fn test_drop_filled_item(value: Arc<RwLock<NoCopy>>) {
         {
-            let data = SegmentData::empty();
+            let data = Item::empty();
             {
                 assert!(data.try_write(DropTest(value.clone())).is_ok());
             }
@@ -663,16 +663,16 @@ mod tests {
         assert_eq!(*value.read().unwrap(), NoCopy(1));
     }
 
-    fn test_drop_empty_segment_data() {
+    fn test_drop_empty_item() {
         // Shouldn't try to drop anything.
-        let data: SegmentData<DropTest> = SegmentData::empty();
+        let data: Item<DropTest> = Item::empty();
         // Shouldn't panic.
         mem::drop(data);
     }
 
-    fn test_drop_after_poping_segment_data(value: Arc<RwLock<NoCopy>>) {
+    fn test_drop_after_poping_item(value: Arc<RwLock<NoCopy>>) {
         {
-            let data = SegmentData::empty();
+            let data = Item::empty();
             {
                 assert!(data.try_write(DropTest(value.clone())).is_ok());
             }
@@ -695,60 +695,60 @@ mod tests {
     }
 
     #[test]
-    fn segment_data_integers() {
-        test_segment_data(1u8, 2, 0);
-        test_segment_data(3u16, 4, 0);
-        test_segment_data(5u32, 6, 0);
-        test_segment_data(7u64, 8, 0);
-        test_segment_data(-1i8, 2, 0);
-        test_segment_data(-3i16, 4, 0);
-        test_segment_data(-5i32, 6, 0);
-        test_segment_data(-7i64, 8, 0);
+    fn item_integers() {
+        test_item(1u8, 2, 0);
+        test_item(3u16, 4, 0);
+        test_item(5u32, 6, 0);
+        test_item(7u64, 8, 0);
+        test_item(-1i8, 2, 0);
+        test_item(-3i16, 4, 0);
+        test_item(-5i32, 6, 0);
+        test_item(-7i64, 8, 0);
     }
 
     #[test]
-    fn segment_data_strings() {
-        test_segment_data("value 1", "value 2", "err value");
-        test_segment_data("value 1".to_owned(), "value 2".to_owned(), "err value".to_owned());
-        test_segment_data("value 1".as_bytes(), "value 2".as_bytes(), "err value".as_bytes());
+    fn item_strings() {
+        test_item("value 1", "value 2", "err value");
+        test_item("value 1".to_owned(), "value 2".to_owned(), "err value".to_owned());
+        test_item("value 1".as_bytes(), "value 2".as_bytes(), "err value".as_bytes());
     }
 
     #[test]
-    fn segment_data_vectors() {
-        test_segment_data(vec![1u8, 2, 3], vec![4, 5, 6], vec![7, 8, 9]);
-        test_segment_data(vec![10u16, 12, 13], vec![14, 15, 16], vec![17, 18, 19]);
-        test_segment_data(vec![20u32, 22, 23], vec![24, 25, 26], vec![27, 28, 29]);
-        test_segment_data(vec![30u64, 32, 33], vec![34, 35, 36], vec![37, 38, 39]);
-        test_segment_data(vec![-1i8, 2, 3], vec![4, 5, 6], vec![7, 8, 9]);
-        test_segment_data(vec![-10i16, 12, 13], vec![14, 15, 16], vec![17, 18, 19]);
-        test_segment_data(vec![-20i32, 22, 23], vec![24, 25, 26], vec![27, 28, 29]);
-        test_segment_data(vec![-30i64, 32, 33], vec![34, 35, 36], vec![37, 38, 39]);
+    fn item_vectors() {
+        test_item(vec![1u8, 2, 3], vec![4, 5, 6], vec![7, 8, 9]);
+        test_item(vec![10u16, 12, 13], vec![14, 15, 16], vec![17, 18, 19]);
+        test_item(vec![20u32, 22, 23], vec![24, 25, 26], vec![27, 28, 29]);
+        test_item(vec![30u64, 32, 33], vec![34, 35, 36], vec![37, 38, 39]);
+        test_item(vec![-1i8, 2, 3], vec![4, 5, 6], vec![7, 8, 9]);
+        test_item(vec![-10i16, 12, 13], vec![14, 15, 16], vec![17, 18, 19]);
+        test_item(vec![-20i32, 22, 23], vec![24, 25, 26], vec![27, 28, 29]);
+        test_item(vec![-30i64, 32, 33], vec![34, 35, 36], vec![37, 38, 39]);
 
-        test_segment_data(vec!["1", "2", "3"],
+        test_item(vec!["1", "2", "3"],
             vec!["4", "5", "6"],
             vec!["7", "8", "9"]);
-        test_segment_data(vec!["1".to_owned(), "2".to_owned(), "3".to_owned()],
+        test_item(vec!["1".to_owned(), "2".to_owned(), "3".to_owned()],
             vec!["4".to_owned(), "5".to_owned(), "6".to_owned()],
             vec!["7".to_owned(), "8".to_owned(), "9".to_owned()]);
-        test_segment_data(vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes()],
+        test_item(vec!["1".as_bytes(), "2".as_bytes(), "3".as_bytes()],
             vec!["4".as_bytes(), "5".as_bytes(), "6".as_bytes()],
             vec!["7".as_bytes(), "8".as_bytes(), "9".as_bytes()]);
 
-        test_segment_data(vec![NoCopy(1), NoCopy(2), NoCopy(2)],
+        test_item(vec![NoCopy(1), NoCopy(2), NoCopy(2)],
             vec![NoCopy(4), NoCopy(5), NoCopy(6)],
             vec![NoCopy(7), NoCopy(8), NoCopy(9)]);
     }
 
     #[test]
-    fn segment_data_not_copyable() {
-        test_segment_data(NoCopy(100), NoCopy(200), NoCopy(0));
+    fn item_not_copyable() {
+        test_item(NoCopy(100), NoCopy(200), NoCopy(0));
     }
 
     /// Required: `value1` > `value2` and `value2` > `value1`.
-    fn test_segment_data<T>(value1: T, value2: T, err_value: T)
+    fn test_item<T>(value1: T, value2: T, err_value: T)
         where T: Send + Sync + Clone + PartialEq + PartialOrd + fmt::Debug
     {
-        let data = SegmentData::empty();
+        let data = Item::empty();
         assert!(data.is_empty());
         assert!(!data.is_ready());
         assert!(data.try_pop().is_none());
