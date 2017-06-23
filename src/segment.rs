@@ -63,6 +63,11 @@ impl<T> Segment<T> {
     }
 
     /// Push `data` to the front of the `Segment`.
+    ///
+    /// # Note
+    ///
+    /// This function will deligate to peer `Segement`s if the position is not
+    /// in this `Segment`.
     pub fn try_push_front(&self, head_pos: &AtomicIsize, data: T) -> Result<(), T> {
         // Grab a new position for ourself and try to write to it.
         //
@@ -80,6 +85,11 @@ impl<T> Segment<T> {
     }
 
     /// Push `data` to the back of the `Segment`.
+    ///
+    /// # Note
+    ///
+    /// This function will deligate to peer `Segement`s if the position is not
+    /// in this `Segment`.
     pub fn try_push_back(&self, tail_pos: &AtomicIsize, data: T) -> Result<(), T> {
         // See `push_front` for documentation, this does the same thing but with
         // a different position and returned error.
