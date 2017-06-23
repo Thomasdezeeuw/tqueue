@@ -51,7 +51,10 @@ pub struct Segment<T> {
 
 impl<T> Segment<T> {
     /// Create new empty `Segment`, it is already boxed because this is required
-    /// for the `expand` functions.
+    /// for the [`expand_front`] and [`expand_back`] functions.
+    ///
+    /// [`expand_front`]: #method.expand_front
+    /// [`expand_back`]: #method.expand_back
     pub fn empty() -> Box<Segment<T>> {
         Box::new(Segment {
             id: 0,
