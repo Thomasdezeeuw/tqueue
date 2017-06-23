@@ -34,39 +34,41 @@ impl<T> Queue<T> {
     }
 
     pub fn push_front(&self, data: T) {
-        self.head().push_front(&self.head_pos, data)
+        self.head().try_push_front(&self.head_pos, data)
             .unwrap_or_else(|data| {
+                // FIXME: expanding is not always needed.
                 self.expand_front();
                 self.push_front(data)
             });
     }
 
     pub fn push_back(&self, data: T) {
-        self.tail().push_back(&self.tail_pos, data)
+        self.tail().try_push_back(&self.tail_pos, data)
             .unwrap_or_else(|data| {
+                // FIXME: expanding is not always needed.
                 self.expand_back();
                 self.push_back(data)
             });
     }
 
-    pub fn pop_front(&self) -> Option<T> {
-        self.head().pop_front(&self.head_pos)
+    pub fn try_pop_front(&self) -> Option<T> {
+        self.head().try_pop_front(&self.head_pos)
     }
 
-    pub fn pop_back(&self) -> Option<T> {
-        self.tail().pop_back(&self.tail_pos)
+    pub fn try_pop_back(&self) -> Option<T> {
+        self.tail().try_pop_back(&self.tail_pos)
     }
 
-    pub fn conditional_pop_front<P>(&self, predicate: P) -> Option<T>
+    pub fn conditional_try_pop_front<P>(&self, predicate: P) -> Option<T>
         where P: Fn(&T) -> bool
     {
-        self.head().conditional_pop_front(&self.head_pos, predicate)
+        self.head().conditional_try_pop_front(&self.head_pos, predicate)
     }
 
-    pub fn conditional_pop_back<P>(&self, predicate: P) -> Option<T>
+    pub fn conditional_try_pop_back<P>(&self, predicate: P) -> Option<T>
         where P: Fn(&T) -> bool
     {
-        self.tail().conditional_pop_back(&self.tail_pos, predicate)
+        self.tail().conditional_try_pop_back(&self.tail_pos, predicate)
     }
 
     fn expand_front(&self) {

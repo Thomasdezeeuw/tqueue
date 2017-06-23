@@ -13,9 +13,6 @@ use super::state::AtomicState;
 // TODO: benchmark smaller and bigger sizes.
 pub const SEGMENT_SIZE: usize = 32;
 
-/// The maximum number of tries before the operation given up.
-const MAX_TRIES: usize = 10;
-
 /// The id of a [`Segment`].
 ///
 /// [`Segment`]: struct.Segment.html
@@ -64,13 +61,13 @@ impl<T> Segment<T> {
     }
 
     /// Push `data` to the front of the `Segment`.
-    pub fn push_front(&self, head_pos: &AtomicIsize, data: T) -> Result<(), T> {
+    pub fn try_push_front(&self, head_pos: &AtomicIsize, data: T) -> Result<(), T> {
         // Grab a new position for ourself and try to write to it.
         //
         // Note we don't have exclusive access to it so we're still racing for
         // it, hence the fact that `SegmentData` has it's own access control.
         let pos = head_pos.fetch_sub(1, DEFAULT_ORDERING);
-        self.write_position(pos, data)
+        self.try_write_position(pos, data)
             .map_err(|data| {
                 // Failed to write, release the position.
                 head_pos.fetch_add(1, DEFAULT_ORDERING);
@@ -81,11 +78,11 @@ impl<T> Segment<T> {
     }
 
     /// Push `data` to the back of the `Segment`.
-    pub fn push_back(&self, tail_pos: &AtomicIsize, data: T) -> Result<(), T> {
+    pub fn try_push_back(&self, tail_pos: &AtomicIsize, data: T) -> Result<(), T> {
         // See `push_front` for documentation, this does the same thing but with
         // a different position and returned error.
         let pos = tail_pos.fetch_add(1, DEFAULT_ORDERING);
-        self.write_position(pos, data)
+        self.try_write_position(pos, data)
             .map_err(|data| {
                 tail_pos.fetch_sub(1, DEFAULT_ORDERING);
                 data
@@ -102,7 +99,7 @@ impl<T> Segment<T> {
     ///
     /// If the segment to which the position belongs doesn't exitsts this will
     /// return an error.
-    fn write_position(&self, pos: Pos, data: T) -> Result<(), T> {
+    fn try_write_position(&self, pos: Pos, data: T) -> Result<(), T> {
         // Get the `SegmentId` based on the `Pos`ition in which this data must
         // be written.
         //
@@ -111,23 +108,23 @@ impl<T> Segment<T> {
         if segment_id == self.id {
             // If its this segment we can get the index and write to it.
             let index = pos_to_index(pos);
-            self.data[index].write(data, MAX_TRIES)
+            self.data[index].try_write(data)
         } else if segment_id < self.id {
             // Otherwise we need to pass the write on to the `prev`ious or
             // `next` segment.
-            write_position(&self.prev, pos, data)
+            try_write_position(&self.prev, pos, data)
         } else {
-            write_position(&self.next, pos, data)
+            try_write_position(&self.next, pos, data)
         }
     }
 
-    pub fn pop_front(&self, head_pos: &AtomicIsize) -> Option<T> {
+    pub fn try_pop_front(&self, head_pos: &AtomicIsize) -> Option<T> {
         // Grab a new position for ourself and try to read from it.
         //
         // Note we don't have exclusive access to it so we're still racing for
         // it, hence the fact that `SegmentData` has it's own access control.
         let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
-        self.pop_position(pos)
+        self.try_pop_position(pos)
             .or_else(|| {
                 // Failed to read, release the position.
                 head_pos.fetch_sub(1, DEFAULT_ORDERING);
@@ -137,11 +134,11 @@ impl<T> Segment<T> {
             })
     }
 
-    pub fn pop_back(&self, tail_pos: &AtomicIsize) -> Option<T> {
+    pub fn try_pop_back(&self, tail_pos: &AtomicIsize) -> Option<T> {
         // See `pop_front` for documentation, this does the same thing but with
         // a different position.
         let pos = tail_pos.fetch_sub(1, DEFAULT_ORDERING);
-        self.pop_position(pos)
+        self.try_pop_position(pos)
             .or_else(|| {
                 tail_pos.fetch_add(1, DEFAULT_ORDERING);
                 None
@@ -158,7 +155,7 @@ impl<T> Segment<T> {
     ///
     /// If the segment to which the position belongs doesn't exitsts this will
     /// return `None`.
-    fn pop_position(&self, pos: Pos) -> Option<T> {
+    fn try_pop_position(&self, pos: Pos) -> Option<T> {
         // Get the `SegmentId` based on the `Pos`ition in which this data must
         // be written.
         //
@@ -167,17 +164,17 @@ impl<T> Segment<T> {
         if segment_id == self.id {
             // If its this segment we can get the index and write to it.
             let index = pos_to_index(pos);
-            self.data[index].pop(MAX_TRIES)
+            self.data[index].try_pop()
         } else if segment_id < self.id {
             // Otherwise we need to pass the read on to the `prev`ious or
             // `next` segment.
-            pop_position(&self.prev, pos)
+            try_pop_position(&self.prev, pos)
         } else {
-            pop_position(&self.next, pos)
+            try_pop_position(&self.next, pos)
         }
     }
 
-    pub fn conditional_pop_front<P>(&self, head_pos: &AtomicIsize, predicate: P) -> Option<T>
+    pub fn conditional_try_pop_front<P>(&self, head_pos: &AtomicIsize, predicate: P) -> Option<T>
         where P: Fn(&T) -> bool
     {
         // Grab a new position for ourself and try to read from it.
@@ -185,7 +182,7 @@ impl<T> Segment<T> {
         // Note we don't have exclusive access to it so we're still racing for
         // it, hence the fact that `SegmentData` has it's own access control.
         let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
-        self.conditional_pop_position(pos, predicate)
+        self.conditional_try_pop_position(pos, predicate)
             .or_else(|| {
                 // Failed to read, release the position.
                 head_pos.fetch_sub(1, DEFAULT_ORDERING);
@@ -195,13 +192,13 @@ impl<T> Segment<T> {
             })
     }
 
-    pub fn conditional_pop_back<P>(&self, tail_pos: &AtomicIsize, predicate: P) -> Option<T>
+    pub fn conditional_try_pop_back<P>(&self, tail_pos: &AtomicIsize, predicate: P) -> Option<T>
         where P: Fn(&T) -> bool
     {
         // See `conditional_pop_front` for documentation, this does the same thing but with
         // a different position.
         let pos = tail_pos.fetch_sub(1, DEFAULT_ORDERING);
-        self.conditional_pop_position(pos, predicate)
+        self.conditional_try_pop_position(pos, predicate)
             .or_else(|| {
                 tail_pos.fetch_add(1, DEFAULT_ORDERING);
                 None
@@ -218,7 +215,7 @@ impl<T> Segment<T> {
     ///
     /// If the segment to which the position belongs doesn't exitsts this will
     /// return `None`.
-    fn conditional_pop_position<P>(&self, pos: Pos, predicate: P) -> Option<T>
+    fn conditional_try_pop_position<P>(&self, pos: Pos, predicate: P) -> Option<T>
         where P: Fn(&T) -> bool
     {
         // Get the `SegmentId` based on the `Pos`ition in which this data must
@@ -229,13 +226,13 @@ impl<T> Segment<T> {
         if segment_id == self.id {
             // If its this segment we can get the index and write to it.
             let index = pos_to_index(pos);
-            self.data[index].conditional_pop(predicate, MAX_TRIES)
+            self.data[index].conditional_try_pop(predicate)
         } else if segment_id < self.id {
             // Otherwise we need to pass the read on to the `prev`ious or
             // `next` segment.
-            conditional_pop_position(&self.prev, pos, predicate)
+            conditional_try_pop_position(&self.prev, pos, predicate)
         } else {
-            conditional_pop_position(&self.next, pos, predicate)
+            conditional_try_pop_position(&self.next, pos, predicate)
         }
     }
 
@@ -382,7 +379,7 @@ fn pos_to_index(pos: Pos) -> usize {
 ///
 /// The provided pointer must follow the contract defined in the `Segment.{next,
 /// prev}` fields.
-fn write_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, data: T) -> Result<(), T> {
+fn try_write_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, data: T) -> Result<(), T> {
     let segment = unsafe {
         // This is safe because the `previous` and `next` pointers must always
         // point to a valid segment, if not null.
@@ -393,7 +390,7 @@ fn write_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, data: T) -> Result<(
     if let Some(segment) = segment {
         // the next or previous segment exists and we'll let it deal with the
         // write.
-        segment.write_position(pos, data)
+        segment.try_write_position(pos, data)
     } else {
         // A next or previous segment doesn't exists, so we return an error.
         Err(data)
@@ -407,7 +404,7 @@ fn write_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, data: T) -> Result<(
 ///
 /// The provided pointer must follow the contract defined in the `Segment.{next,
 /// prev}` fields.
-fn pop_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos) -> Option<T> {
+fn try_pop_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos) -> Option<T> {
     let segment = unsafe {
         // This is safe because the `previous` and `next` pointers must always
         // point to a valid segment, if not null.
@@ -418,7 +415,7 @@ fn pop_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos) -> Option<T> {
     if let Some(segment) = segment {
         // the next or previous segment exists and we'll let it deal with the
         // write.
-        segment.pop_position(pos)
+        segment.try_pop_position(pos)
     } else {
         // A next or previous segment doesn't exists.
         None
@@ -432,7 +429,7 @@ fn pop_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos) -> Option<T> {
 ///
 /// The provided pointer must follow the contract defined in the `Segment.{next,
 /// prev}` fields.
-fn conditional_pop_position<P, T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, predicate: P) -> Option<T>
+fn conditional_try_pop_position<P, T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, predicate: P) -> Option<T>
     where P: Fn(&T) -> bool
 {
     let segment = unsafe {
@@ -445,7 +442,7 @@ fn conditional_pop_position<P, T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, predica
     if let Some(segment) = segment {
         // the next or previous segment exists and we'll let it deal with the
         // write.
-        segment.conditional_pop_position(pos, predicate)
+        segment.conditional_try_pop_position(pos, predicate)
     } else {
         // A next or previous segment doesn't exists.
         None
@@ -523,20 +520,6 @@ impl<T> SegmentData<T> {
         }
     }
 
-    /// This function does the same thing as [`try_write`], however if
-    /// [`try_write`] returns an error this function will try it again until it
-    /// succeeds or until it tried `tries` many times.
-    ///
-    /// [`try_write`]: struct.SegmentData.html#method.try_write
-    pub fn write(&self, data: T, tries: usize) -> Result<(), T> {
-        if tries == 0 {
-            Err(data)
-        } else {
-            self.try_write(data)
-                .or_else(|data| self.write(data, tries - 1))
-        }
-    }
-
     /// Try to read the data from this `SegmentData` and remove it, after which
     /// it will be empty. If the state is not [`Ready`], this includes when the
     /// data is being read from or written to, the data can't be read. If
@@ -579,20 +562,6 @@ impl<T> SegmentData<T> {
         data
     }
 
-    /// This function does the same thing as [`try_pop`], however if [`try_pop`]
-    /// returns `None` this function will try it again until it returns
-    /// something or until it tried `tries` many times.
-    ///
-    /// [`try_pop`]: struct.SegmentData.html#method.try_pop
-    pub fn pop(&self, tries: usize) -> Option<T> {
-        for _ in 0..tries {
-            if let Some(data) = self.try_pop() {
-                return Some(data);
-            }
-        }
-        None
-    }
-
     /// This is the same as [`try_pop`], however makes sure the returned data
     /// fulfills the provided `predicate`. See [`try_pop`] for more.
     ///
@@ -628,27 +597,6 @@ impl<T> SegmentData<T> {
         } else {
             None
         }
-    }
-
-    /// This function is what [`pop`] is to [`try_pop`], but for
-    /// [`conditional_try_pop`]. See those functions for more.
-    ///
-    /// [`pop`]: struct.SegmentData.html#method.pop
-    /// [`try_pop`]: struct.SegmentData.html#method.try_pop
-    /// [`conditional_try_pop`]: struct.SegmentData.html#method.conditional_try_pop
-    pub fn conditional_pop<P>(&self, predicate: P, tries: usize) -> Option<T>
-        where P: Fn(&T) -> bool
-    {
-        for _ in 0..tries {
-            // `conditional_try_pop` takes ownership of the predicate, so we
-            // need to create a little wrapper closure to make sure we can reuse
-            // the actual `predicate`.
-            let predicate = |data: &T| predicate(data);
-            if let Some(data) = self.conditional_try_pop(predicate) {
-                return Some(data);
-            }
-        }
-        None
     }
 }
 
@@ -800,8 +748,6 @@ mod tests {
     fn test_segment_data<T>(value1: T, value2: T, err_value: T)
         where T: Send + Sync + Clone + PartialEq + PartialOrd + fmt::Debug
     {
-        const MAX_TRIES: usize = 5;
-
         let data = SegmentData::empty();
         assert!(data.is_empty());
         assert!(!data.is_ready());
@@ -813,32 +759,32 @@ mod tests {
         assert!(data.is_ready());
 
         // Shouldn't be able to write again.
-        assert!(data.write(err_value.clone(), MAX_TRIES).is_err());
+        assert!(data.try_write(err_value.clone()).is_err());
 
         // Read (pop) the data.
         let got1 = data.try_pop();
         assert_eq!(got1, Some(value1.clone()));
         assert!(data.is_empty());
         assert!(!data.is_ready());
-        assert!(data.pop(MAX_TRIES).is_none());
+        assert!(data.try_pop().is_none());
         assert!(data.is_empty());
         assert!(!data.is_ready());
 
         // Test reuseage:
 
         // Write and read some data again.
-        assert!(data.write(value2.clone(), MAX_TRIES).is_ok());
+        assert!(data.try_write(value2.clone()).is_ok());
         assert!(!data.is_empty());
         assert!(data.is_ready());
 
         // Predicate is not true.
-        assert!(data.conditional_pop(|value2| *value2 < value1, MAX_TRIES).is_none());
+        assert!(data.conditional_try_pop(|value2| *value2 < value1).is_none());
         // Predicate is true.
         let got2 = data.conditional_try_pop(|value2| *value2 > value1);
         assert_eq!(got2, Some(value2.clone()));
         assert!(data.is_empty());
         assert!(!data.is_ready());
-        assert!(data.pop(MAX_TRIES).is_none());
+        assert!(data.try_pop().is_none());
         assert!(data.is_empty());
         assert!(!data.is_ready());
 
