@@ -25,19 +25,48 @@ type SegmentId = isize;
 /// [`Item`]: struct.Item.html
 type Pos = isize;
 
-// Does not drop it the pointers to next and previous segments.
-//
-// TODO: make pub(crate), unstable feature.
+/// `Segment` is an array that can hold [`n`] number of items `T`. All push and
+/// pop operations will be deligated to its peers, if it has any.
+///
+/// Expand this `Segment` can be done with the [`expand_front`] and
+/// [`expand_back`] methods, which will add peers to this `Segment`.
+///
+/// # Note
+///
+/// It does **not** drop it's peers, the user is responsible for that, see
+/// [`get_peers`].
+///
+/// # Usage
+///
+/// Required for using a `Segment` are two positions, one for the `head` and one
+/// for the `tail`, both must be [`AtomicIsize`]. The `*_front` methods require
+/// the `head` position, while the `*_back` methods require the `tail` position,
+/// as the different methods mention in the argument names.
+///
+/// These two positions are not synced in any way with each other. **Neither
+/// position may be modified outside of a `Segment` call**, or bad things might
+/// happen otherwise.
+///
+/// For performance it's recommended that the user keeps track of the first and
+/// last `Segment`, however since all methods will deligate to its peers this is
+/// not necessary.
+///
+/// [`n`]: constant.SEGMENT_SIZE.html
+/// [`get_peers`]: struct.Segment.html#method.get_peers
+/// [`expand_front`]: struct.Segment.html#method.expand_front
+/// [`expand_back`]: struct.Segment.html#method.expand_back
+/// [`AtomicIsize`]: https://doc.rust-lang.org/nightly/core/sync/atomic/struct.AtomicIsize.html
 pub struct Segment<T> {
     /// The `SegmentId` of the `Segment` used in determining to which `Segment`
     /// data must be written or read from.
     id: SegmentId,
 
     /// The data this segment is responible for. Due to the nature of the global
-    /// position (see `push_front` and `push_back`) it is very possible that
-    /// this will contain holes.
+    /// position (see [`try_push_front`] and [`try_push_back`]) it is very
+    /// possible that this will contain holes.
     ///
-    // TODO: doc data fragmentation more.
+    /// [`try_push_front`]: #method.try_push_front
+    /// [`try_push_back`]: #method.try_push_back
     data: [Item<T>; SEGMENT_SIZE],
 
     /// The pointers to the next and previous `Segment`s.
