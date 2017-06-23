@@ -466,7 +466,7 @@ impl<T> fmt::Debug for Segment<T> {
 ///
 /// [`Send`]: https://doc.rust-lang.org/nightly/core/marker/trait.Send.html
 /// [`Sync`]: https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html
-pub struct Item<T> {
+struct Item<T> {
     /// The state of the data.
     state: AtomicState,
 
