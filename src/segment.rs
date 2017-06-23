@@ -201,6 +201,13 @@ impl<T> Segment<T> {
         }
     }
 
+    /// Try to remove data from the front of the `Segment`, but only is the
+    /// `predicate` returns true.
+    ///
+    /// # Note
+    ///
+    /// This function will deligate to peer `Segement`s if the position is not
+    /// in this `Segment`.
     pub fn conditional_try_pop_front<P>(&self, head_pos: &AtomicIsize, predicate: P) -> Option<T>
         where P: FnOnce(&T) -> bool
     {
@@ -219,6 +226,13 @@ impl<T> Segment<T> {
             })
     }
 
+    /// Try to remove data from the back of the `Segment`, but only is the
+    /// `predicate` returns true.
+    ///
+    /// # Note
+    ///
+    /// This function will deligate to peer `Segement`s if the position is not
+    /// in this `Segment`.
     pub fn conditional_try_pop_back<P>(&self, tail_pos: &AtomicIsize, predicate: P) -> Option<T>
         where P: FnOnce(&T) -> bool
     {
