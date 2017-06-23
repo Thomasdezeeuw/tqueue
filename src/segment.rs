@@ -335,14 +335,17 @@ impl<T> Segment<T> {
         }
     }
 
-    /// Get the current `prev`ious and `next` raw pointers. If these are not
-    /// null they will always point to valid memory.
+    /// Get the peer `Segment`s from this `Segment`. If these are not null they
+    /// will always point to other valid `Segment`s.
     ///
     /// # Note
     ///
+    /// Once this method is called **all** peers of the `Segment` will become
+    /// invalid and any method called on them, with the expection of this one,
+    /// can result in a segfault.
+    ///
     /// This method may only be called when dropping it, hence the fact that it
-    /// moves itself.
-    #[doc(hidden)]
+    /// moves and drops itself.
     pub fn get_peers(self) -> (*mut Segment<T>, *mut Segment<T>) {
         let prev = self.prev.load(Ordering::Relaxed);
         let next = self.next.load(Ordering::Relaxed);
