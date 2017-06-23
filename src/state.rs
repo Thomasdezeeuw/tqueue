@@ -129,7 +129,30 @@ impl AtomicState {
 
 #[cfg(test)]
 mod tests {
+    use std::{fmt, mem};
+
     use super::*;
+
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+    fn assert_debug<T: fmt::Debug>() {}
+    fn assert_size<T>(want: usize) {
+        assert_eq!(mem::size_of::<T>(), want);
+    }
+
+    #[test]
+    fn atomic_state_assertions() {
+        assert_send::<AtomicState>();
+        assert_sync::<AtomicState>();
+        assert_debug::<AtomicState>();
+
+        // Just a atomic usize.
+        #[cfg(target_pointer_width = "64")]
+        let want = 8;
+        #[cfg(target_pointer_width = "32")]
+        let want = 4;
+        assert_size::<AtomicState>(want);
+    }
 
     #[test]
     fn atomic_state() {
