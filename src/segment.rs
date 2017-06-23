@@ -277,17 +277,25 @@ impl<T> Segment<T> {
         }
     }
 
-    // Returns the pointer to the new tail segment.
-    // Needs to be called on a box.
-    //
-    // Returns Some if a new segment was added, else None if it already had an
-    // segment.
-    //
-    // return pointer will always be from Box::into_raw()
-    //
-    // MUST BE CALLED FROM BOX!!
-    //
-    // TODO: doc.
+    /// Expand the current `Segment` with a peer `Segment` to the front. If this
+    /// `Segment` already has a peer at the front it will return `None`,
+    /// otherwise it will return a raw pointer to the new `Segment` in the
+    /// front.
+    ///
+    /// This pointer can only be used to update the first `Segment` in the users
+    /// administration. If the `Segment` from the pointer is dropped this, and
+    /// all peer `Segment`s, become invalid and further usage will cause a
+    /// segfault, the only expection is [`get_peers`].
+    ///
+    /// # Usage
+    ///
+    /// **This function must be called with a heap reference**, e.g. by using a
+    /// `Box` or an [`AtomicPtr`], hence the reason why [`Segment::empty`]
+    /// returns a boxed `Segment`.
+    ///
+    /// [`get_peers`]: #method.get_peers
+    /// [`AtomicPtr`]: https://doc.rust-lang.org/nightly/core/sync/atomic/struct.AtomicPtr.html
+    /// [`Segment::empty`]: #method.empty
     pub unsafe fn expand_front(&self) -> Option<*mut Segment<T>> {
         if self.prev.load(DEFAULT_ORDERING).is_null() {
             let ptr = Segment::expand_front_with_segment(&self, Segment::empty());
