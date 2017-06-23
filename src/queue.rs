@@ -71,25 +71,26 @@ impl<T> Queue<T> {
         self.tail().conditional_try_pop_back(&self.tail_pos, predicate)
     }
 
+    /// Expand the queue with a new `Segment` at the front.
     fn expand_front(&self) {
         // Expand the segment to the front and then store the new pointer as the
         // new head. We can use releaxed ordering here since `Segment` will take
-        // into account that `self.head` might not point to the correct head. If
-        // the function returns `None` .
+        // into account that `self.head` might not point to the correct head.
         //
-        // FIXME: this function must be called with a reference to the heap,
-        // make sure that this is always the case.
+        // FIXME: Segment::expand_front must be called with a reference to the
+        // heap, make sure that this is always the case.
         //
         // FIXME: if self.head points to an old head (head - 1), but the actual
-        // head is full and we try to extend it expand_front will return None,
-        // and we won't be able to expand the segment ever again.
+        // head is full and we try to extend it wth Segment::expand_front, it
+        // will return None, and we won't be able to expand the segment ever
+        // again.
         if let Some(new_head_ptr) = unsafe { Segment::expand_front(self.head()) } {
             self.head.store(new_head_ptr, Ordering::Relaxed);
         }
     }
 
+    /// See `expand_front` for docs.
     fn expand_back(&self) {
-        // See `expand_front` for docs.
         if let Some(new_tail_ptr) = unsafe { Segment::expand_back(self.tail()) } {
             self.tail.store(new_tail_ptr, Ordering::Relaxed);
         }
