@@ -51,9 +51,8 @@ pub struct Segment<T> {
 }
 
 impl<T> Segment<T> {
-    /// Create new empty `Segment`.
-    //
-    // TODO: doc box required for functions.
+    /// Create new empty `Segment`, it is already boxed because this is required
+    /// for the `expand` functions.
     pub fn empty() -> Box<Segment<T>> {
         Box::new(Segment {
             id: 0,
