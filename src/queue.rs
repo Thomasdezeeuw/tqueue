@@ -95,17 +95,17 @@ impl<T> Queue<T> {
         }
     }
 
+    /// Get a reference to the current `head`, note that it may not be the
+    /// actual head, but `Segment` will deal with that.
     #[inline(always)]
     fn head(&self) -> &Segment<T> {
-        // Safe because the head must always point to a valid segment, but it
-        // doesn't always have to point to the actual head; it may point to head
-        // - 1.
+        // Safe because the head must always point to a valid segment.
         unsafe { &*self.head.load(Ordering::Relaxed) }
     }
 
+    /// See `head` for docs.
     #[inline(always)]
     fn tail(&self) -> &Segment<T> {
-        // For docs see `head`.
         unsafe { &*self.tail.load(Ordering::Relaxed) }
     }
 }
