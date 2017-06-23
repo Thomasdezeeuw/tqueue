@@ -3,8 +3,10 @@ use std::default::Default;
 use std::sync::atomic::{AtomicPtr, AtomicIsize, Ordering};
 use std::{fmt, mem, ptr};
 
-use super::DEFAULT_ORDERING;
 use super::state::AtomicState;
+
+// TODO: try to relax the ordering, on a per call basis.
+const DEFAULT_ORDERING: Ordering = Ordering::SeqCst;
 
 /// The size of a single [`Segment`]. 32 is chosen somewhat arbitrarily.
 ///
