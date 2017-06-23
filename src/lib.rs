@@ -58,11 +58,11 @@ mod assertions {
         assert_sync::<Segment<u64>>();
         assert_debug::<Segment<u64>>();
 
-        // 8 bytes for the id, `SEGMENT_SIZE` * `Item`, 2x pointers.
+        // 8 or 4 bytes for the id, `SEGMENT_SIZE` * `Item`, 2x pointers.
         #[cfg(target_pointer_width = "64")]
         let want = 8 + (SEGMENT_SIZE * (8 + 8 + 8)) + 8 + 8;
         #[cfg(target_pointer_width = "32")]
-        let want = 8 + (SEGMENT_SIZE * (8 + 8 + 8)) + 4 + 4;
+        let want = 4 + (SEGMENT_SIZE * (4 + 8 + 8)) + 4 + 4;
         assert_size::<Segment<u64>>(want);
     }
 
