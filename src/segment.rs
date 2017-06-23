@@ -120,6 +120,12 @@ impl<T> Segment<T> {
         }
     }
 
+    /// Try to remove data from the front of the `Segment`.
+    ///
+    /// # Note
+    ///
+    /// This function will deligate to peer `Segement`s if the position is not
+    /// in this `Segment`.
     pub fn try_pop_front(&self, head_pos: &AtomicIsize) -> Option<T> {
         // Grab a new position for ourself and try to read from it.
         //
@@ -136,6 +142,12 @@ impl<T> Segment<T> {
             })
     }
 
+    /// Try to remove data from the back of the `Segment`.
+    ///
+    /// # Note
+    ///
+    /// This function will deligate to peer `Segement`s if the position is not
+    /// in this `Segment`.
     pub fn try_pop_back(&self, tail_pos: &AtomicIsize) -> Option<T> {
         // See `pop_front` for documentation, this does the same thing but with
         // a different position.
