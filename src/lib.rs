@@ -39,7 +39,7 @@ mod assertions {
     }
 
     #[test]
-    fn segment_data() {
+    fn item() {
         assert_send::<Item<u64>>();
         assert_sync::<Item<u64>>();
         assert_debug::<Item<u64>>();

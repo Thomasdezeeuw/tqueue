@@ -509,7 +509,7 @@ impl<T> Item<T> {
         if self.state.set_writing() {
             // This is safe because of the contract described in the `data`
             // field.
-            mem::replace(unsafe { &mut *self.data.get() } , Some(data));
+            mem::swap(unsafe { &mut *self.data.get() } , &mut Some(data));
 
             // Update the `state` to indicate the data is `Ready`.
             // TODO: what to do with this check.
@@ -573,7 +573,7 @@ impl<T> Item<T> {
     ///
     /// [`try_pop`]: struct.Item.html#method.try_pop
     pub fn conditional_try_pop<P>(&self, predicate: P) -> Option<T>
-        where P: Fn(&T) -> bool
+        where P: FnOnce(&T) -> bool
     {
         // Set the state to reading, if this returns false it means we currently
         // can't read the data and we'll return `None`.
