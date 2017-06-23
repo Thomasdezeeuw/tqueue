@@ -175,7 +175,7 @@ impl<T> Segment<T> {
     }
 
     pub fn conditional_try_pop_front<P>(&self, head_pos: &AtomicIsize, predicate: P) -> Option<T>
-        where P: Fn(&T) -> bool
+        where P: FnOnce(&T) -> bool
     {
         // Grab a new position for ourself and try to read from it.
         //
@@ -193,7 +193,7 @@ impl<T> Segment<T> {
     }
 
     pub fn conditional_try_pop_back<P>(&self, tail_pos: &AtomicIsize, predicate: P) -> Option<T>
-        where P: Fn(&T) -> bool
+        where P: FnOnce(&T) -> bool
     {
         // See `conditional_pop_front` for documentation, this does the same thing but with
         // a different position.
@@ -216,7 +216,7 @@ impl<T> Segment<T> {
     /// If the segment to which the position belongs doesn't exitsts this will
     /// return `None`.
     fn conditional_try_pop_position<P>(&self, pos: Pos, predicate: P) -> Option<T>
-        where P: Fn(&T) -> bool
+        where P: FnOnce(&T) -> bool
     {
         // Get the `SegmentId` based on the `Pos`ition in which this data must
         // be written.
@@ -430,7 +430,7 @@ fn try_pop_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos) -> Option<T> {
 /// The provided pointer must follow the contract defined in the `Segment.{next,
 /// prev}` fields.
 fn conditional_try_pop_position<P, T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, predicate: P) -> Option<T>
-    where P: Fn(&T) -> bool
+    where P: FnOnce(&T) -> bool
 {
     let segment = unsafe {
         // This is safe because the `previous` and `next` pointers must always

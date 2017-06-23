@@ -60,13 +60,13 @@ impl<T> Queue<T> {
     }
 
     pub fn conditional_try_pop_front<P>(&self, predicate: P) -> Option<T>
-        where P: Fn(&T) -> bool
+        where P: FnOnce(&T) -> bool
     {
         self.head().conditional_try_pop_front(&self.head_pos, predicate)
     }
 
     pub fn conditional_try_pop_back<P>(&self, predicate: P) -> Option<T>
-        where P: Fn(&T) -> bool
+        where P: FnOnce(&T) -> bool
     {
         self.tail().conditional_try_pop_back(&self.tail_pos, predicate)
     }
