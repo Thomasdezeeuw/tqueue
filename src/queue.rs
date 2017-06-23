@@ -3,23 +3,33 @@ use std::sync::atomic::{AtomicPtr, AtomicIsize, Ordering};
 
 use super::segment::Segment;
 
+/// A queue to which you can push data, either in the
+/// [`front`](#method.push_front) or at the [`back`](#method.push_back). And of
+/// which you can pop data, again either in the [`front`](#method.try_pop_front)
+/// or at the [`back`](#method.try_pop_back).
+///
+/// The queue is safe for concurrent use as all methods only require a
+/// reference.
 pub struct Queue<T> {
-    // TODO: doc that both `head` and `tail` must always point to a valid
-    // segment.
-    //
-    // Doc that the may not point to the correct head/tail and that `Segment`
-    // will take that into account.
-    //
-    // Both must be from Box::into_raw
+    /// Atomic pointers that point to the `head` and `tail` `Segment`s. Neither
+    /// of them may be null or point to invalid memory. However they may point
+    /// to an "incorrect" head or tail, e.g. it can point to a head which has
+    /// another peer which is the actual head, `Segment` deals with this.
+    ///
+    /// `Queue` is responible for dropping all `Segment`s, inlcuding all peers.
+    /// See the `Drop` implementation for more.
     head: AtomicPtr<Segment<T>>,
     tail: AtomicPtr<Segment<T>>,
 
-    // The head and tail pos are not in sync in any way.
+    /// The head and tail positions that are used by `Segment`, neither may be
+    /// modified outside of `Segment` calls. These are not in sync with each
+    /// other in any way.
     head_pos: AtomicIsize,
     tail_pos: AtomicIsize,
 }
 
 impl<T> Queue<T> {
+    /// Create a new, empty queue.
     pub fn new() -> Queue<T> {
         let segment = Segment::empty();
         let head_ptr = unsafe { Segment::expand_front(&segment).unwrap() };
@@ -33,6 +43,7 @@ impl<T> Queue<T> {
         queue
     }
 
+    /// Push `data` to the front of the queue.
     pub fn push_front(&self, data: T) {
         self.head().try_push_front(&self.head_pos, data)
             .unwrap_or_else(|data| {
@@ -42,6 +53,7 @@ impl<T> Queue<T> {
             });
     }
 
+    /// Push `data` to the end of the queue.
     pub fn push_back(&self, data: T) {
         self.tail().try_push_back(&self.tail_pos, data)
             .unwrap_or_else(|data| {
@@ -51,20 +63,30 @@ impl<T> Queue<T> {
             });
     }
 
+    /// Try poping data from the front of the queue, if the queue is (currently)
+    /// empty it will return `None`.
     pub fn try_pop_front(&self) -> Option<T> {
         self.head().try_pop_front(&self.head_pos)
     }
 
+    /// Try poping data from the back of the queue, if the queue is (currently)
+    /// empty it will return `None`.
     pub fn try_pop_back(&self) -> Option<T> {
         self.tail().try_pop_back(&self.tail_pos)
     }
 
+    /// Try poping data from the front of the queue, but only return it if the
+    /// `predicate` returns true. If the queue is (currently) empty, or if the
+    /// `predicate` returns false, it will return `None`.
     pub fn conditional_try_pop_front<P>(&self, predicate: P) -> Option<T>
         where P: FnOnce(&T) -> bool
     {
         self.head().conditional_try_pop_front(&self.head_pos, predicate)
     }
 
+    /// Try poping data from the back of the queue, but only return it if the
+    /// `predicate` returns true. If the queue is (currently) empty, or if the
+    /// `predicate` returns false, it will return `None`.
     pub fn conditional_try_pop_back<P>(&self, predicate: P) -> Option<T>
         where P: FnOnce(&T) -> bool
     {
