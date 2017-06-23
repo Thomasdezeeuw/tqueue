@@ -34,4 +34,4 @@ install:
   - rustc -vV
   - cargo -vV
 test_script:
-  - cargo test --verbose -- --ignored
+  - cargo test --verbose
