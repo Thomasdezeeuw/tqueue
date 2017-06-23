@@ -476,7 +476,7 @@ pub struct Item<T> {
 }
 
 impl<T> Item<T> {
-    /// Create new empty `Item`.
+    /// Create a new empty `Item`.
     pub fn empty() -> Item<T> {
         Item {
             state: AtomicState::empty(),
@@ -544,8 +544,8 @@ impl<T> Item<T> {
     ///
     /// # Safety
     ///
-    /// The state must be set to [`Reading`] before calling this function, this is
-    /// the reason this function is unsafe.
+    /// The state must be set to [`Reading`] before calling this function, this
+    /// is the reason this function is unsafe.
     ///
     /// [`Ready`]: ../state/enum.State.html#variant.Ready
     /// [`Reading`]: ../state/enum.State.html#variant.Reading
@@ -568,8 +568,8 @@ impl<T> Item<T> {
     /// # Note
     ///
     /// The `predicate` function is called while blocking all other operations
-    /// on this `Item`, thus is it advised to make sure the `predicate`
-    /// function doesn't take too long.
+    /// on this `Item`, thus is it advised to make sure the `predicate` function
+    /// doesn't take too long.
     ///
     /// [`try_pop`]: struct.Item.html#method.try_pop
     pub fn conditional_try_pop<P>(&self, predicate: P) -> Option<T>
