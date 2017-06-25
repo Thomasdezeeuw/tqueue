@@ -5,9 +5,10 @@ use std::sync::atomic::{AtomicPtr, AtomicIsize, Ordering};
 use super::segment::Segment;
 
 /// A queue to which you can push data, either in the
-/// [`front`](#method.push_front) or at the [`back`](#method.push_back). And of
-/// which you can pop data, again either in the [`front`](#method.try_pop_front)
-/// or at the [`back`](#method.try_pop_back).
+/// [`front`](struct.Queue.html#method.push_front) or at the
+/// [`back`](struct.Queue.html#method.push_back). And of which you can pop data,
+/// again either in the [`front`](struct.Queue.html#method.try_pop_front) or at
+/// the [`back`](struct.Queue.html#method.try_pop_back).
 ///
 /// The queue is safe for concurrent use as all methods only require a
 /// reference.
