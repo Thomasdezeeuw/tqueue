@@ -327,7 +327,7 @@ impl<T> Segment<T> {
     /// [`Segment::empty`]: #method.empty
     pub unsafe fn expand_front(&self) -> Option<*mut Segment<T>> {
         if self.prev.load(DEFAULT_ORDERING).is_null() {
-            let ptr = Segment::expand_front_with_segment(&self, Segment::empty());
+            let ptr = Segment::expand_front_with_segment(self, Segment::empty());
             Some(ptr)
         } else {
             None
@@ -388,7 +388,7 @@ impl<T> Segment<T> {
     /// `Segment` to the back.
     pub unsafe fn expand_back(&self) -> Option<*mut Segment<T>> {
         if self.next.load(DEFAULT_ORDERING).is_null() {
-            let ptr = Segment::expand_back_with_segment(&self, Segment::empty());
+            let ptr = Segment::expand_back_with_segment(self, Segment::empty());
             Some(ptr)
         } else {
             None

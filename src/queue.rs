@@ -34,13 +34,12 @@ impl<T> Queue<T> {
         let segment = Segment::empty();
         let head_ptr = unsafe { Segment::expand_front(&segment).unwrap() };
 
-        let queue = Queue {
+        Queue {
             head: AtomicPtr::new(head_ptr),
             tail: AtomicPtr::new(Box::into_raw(segment)),
             head_pos: AtomicIsize::new(0),
             tail_pos: AtomicIsize::new(0),
-        };
-        queue
+        }
     }
 
     /// Push `data` to the front of the queue.
