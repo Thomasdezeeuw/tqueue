@@ -688,12 +688,13 @@ impl<T> fmt::Debug for Item<T> {
 }
 
 impl<T> Default for Item<T> {
-    /// Create an empty `Item`, this does the same thing as
-    /// `Item::empty`.
+    /// Create an empty `Item`, this does the same thing as [`Item::empty`].
     ///
     /// # Note
     ///
     /// It does not use `T`'s default value as starting value.
+    ///
+    /// [`Item::empty`]: struct.Item.html#method.empty
     fn default() -> Item<T> {
         Item::empty()
     }
