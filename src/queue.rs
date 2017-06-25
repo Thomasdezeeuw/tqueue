@@ -1,3 +1,4 @@
+use std::default::Default;
 use std::fmt;
 use std::sync::atomic::{AtomicPtr, AtomicIsize, Ordering};
 
@@ -171,6 +172,15 @@ impl<T> Drop for Queue<T> {
 impl<T> fmt::Debug for Queue<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.pad("Queue{{ ... }}")
+    }
+}
+
+impl<T> Default for Queue<T> {
+    /// Create an empty `Queue`, this does the same thing as [`Queue::new`].
+    ///
+    /// [`Queue::new`]: struct.Queue.html#method.new
+    fn default() -> Queue<T> {
+        Queue::new()
     }
 }
 
