@@ -15,15 +15,63 @@ const DEFAULT_ORDERING: Ordering = Ordering::SeqCst;
 // TODO: benchmark smaller and bigger sizes.
 const SEGMENT_SIZE: usize = 32;
 
-/// The id of a [`Segment`].
+/// The id of a [`Segment`]. 0 is an invalid id.
 ///
 /// [`Segment`]: struct.Segment.html
 type SegmentId = isize;
 
-/// The position of a `Item` in the data array in `Segment`.
+/// The position of a [`Item`] in the data array in [`Segment`]. A position can
+/// be mapped to a `SegmentId` and an index for `Segment` data.
+///
+/// if `Pos` is invalid it means that `Segment` is empty. Positions 1 through
+/// `SEGMENT_SIZE` are located in the `SegmentId` with id 1. While
+/// -`SEGMENT_SIZE` through -1 are located in `SegmentId` with id -1.
 ///
 /// [`Item`]: struct.Item.html
-type Pos = isize;
+/// [`Segment`]: struct.Segment.html
+#[derive(Debug, Copy, Clone)]
+struct Pos (isize);
+
+impl Pos {
+    /// Check if the position is valid.
+    fn is_valid(self) -> bool {
+        self.0 != 0
+    }
+
+    /// Determine the `SegmentId` based on the `Pos`ition.
+    ///
+    /// # Panic
+    ///
+    /// This will panic if the `Pos` is invalid.
+    fn get_segment_id(self) -> SegmentId {
+        assert!(self.is_valid(), "called Pos.get_segment_id() with invalid value");
+        if self.0.is_negative() {
+            (self.0 as f64 / SEGMENT_SIZE as f64).floor() as isize
+        } else {
+            ((self.0 as f64 - 1.0) / SEGMENT_SIZE as f64).floor() as isize + 1
+        }
+    }
+
+    /// Determine the index for the `Segment` data.
+    ///
+    /// # Panic
+    ///
+    /// This will panic if the `Pos` is invalid.
+    fn get_index(self) -> usize {
+        assert!(self.is_valid(), "called Pos.get_index() with invalid value");
+        if self.0.is_negative() {
+            (self.0 % SEGMENT_SIZE as isize) as usize
+        } else {
+            (self.0 - 1 % SEGMENT_SIZE as isize) as usize
+        }
+    }
+}
+
+impl fmt::Display for Pos {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Pos({})", self.0)
+    }
+}
 
 /// `Segment` is an array that can hold [`n`] number of items `T`. All push and
 /// pop operations will be deligated to its peers, if it has any.
@@ -105,11 +153,11 @@ impl<T> Segment<T> {
         //
         // Note we don't have exclusive access to it so we're still racing for
         // it, hence the fact that `Item` has it's own access control.
-        let pos = head_pos.fetch_sub(1, DEFAULT_ORDERING);
+        let pos = Pos(head_pos.fetch_sub(1, DEFAULT_ORDERING));
         self.try_write_position(pos, data)
             .map_err(|data| {
                 // Failed to write, release the position.
-                head_pos.fetch_add(1, DEFAULT_ORDERING);
+                let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
                 // FIXME: it could also be that a `Item` is (currently)
                 // in a invalid state, what then?
                 data
@@ -125,10 +173,10 @@ impl<T> Segment<T> {
     pub fn try_push_back(&self, tail_pos: &AtomicIsize, data: T) -> Result<(), T> {
         // See `push_front` for documentation, this does the same thing but with
         // a different position and returned error.
-        let pos = tail_pos.fetch_add(1, DEFAULT_ORDERING);
+        let pos = Pos(tail_pos.fetch_add(1, DEFAULT_ORDERING));
         self.try_write_position(pos, data)
             .map_err(|data| {
-                tail_pos.fetch_sub(1, DEFAULT_ORDERING);
+                let pos = tail_pos.fetch_sub(1, DEFAULT_ORDERING);
                 data
             })
     }
@@ -148,10 +196,10 @@ impl<T> Segment<T> {
         // be written.
         //
         // TODO: call get_segment_id only once per write.
-        let segment_id = get_segment_id(pos);
+        let segment_id = pos.get_segment_id();
         if segment_id == self.id {
             // If its this segment we can get the index and write to it.
-            let index = pos_to_index(pos);
+            let index = pos.get_index();
             self.data[index].try_write(data)
         } else if segment_id < self.id {
             // Otherwise we need to pass the write on to the `prev`ious or
@@ -173,11 +221,11 @@ impl<T> Segment<T> {
         //
         // Note we don't have exclusive access to it so we're still racing for
         // it, hence the fact that `Item` has it's own access control.
-        let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
+        let pos = Pos(head_pos.fetch_add(1, DEFAULT_ORDERING));
         self.try_pop_position(pos)
             .or_else(|| {
                 // Failed to read, release the position.
-                head_pos.fetch_sub(1, DEFAULT_ORDERING);
+                let pos = head_pos.fetch_sub(1, DEFAULT_ORDERING);
                 // FIXME: it could also be that a `Item` is (currently)
                 // in a invalid state, what then?
                 None
@@ -193,10 +241,10 @@ impl<T> Segment<T> {
     pub fn try_pop_back(&self, tail_pos: &AtomicIsize) -> Option<T> {
         // See `pop_front` for documentation, this does the same thing but with
         // a different position.
-        let pos = tail_pos.fetch_sub(1, DEFAULT_ORDERING);
+        let pos = Pos(tail_pos.fetch_sub(1, DEFAULT_ORDERING));
         self.try_pop_position(pos)
             .or_else(|| {
-                tail_pos.fetch_add(1, DEFAULT_ORDERING);
+                let pos = tail_pos.fetch_add(1, DEFAULT_ORDERING);
                 None
             })
     }
@@ -216,10 +264,10 @@ impl<T> Segment<T> {
         // be written.
         //
         // TODO: call get_segment_id only once per read.
-        let segment_id = get_segment_id(pos);
+        let segment_id = pos.get_segment_id();
         if segment_id == self.id {
             // If its this segment we can get the index and write to it.
-            let index = pos_to_index(pos);
+            let index = pos.get_index();
             self.data[index].try_pop()
         } else if segment_id < self.id {
             // Otherwise we need to pass the read on to the `prev`ious or
@@ -244,7 +292,7 @@ impl<T> Segment<T> {
         //
         // Note we don't have exclusive access to it so we're still racing for
         // it, hence the fact that `Item` has it's own access control.
-        let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
+        let pos = Pos(head_pos.fetch_add(1, DEFAULT_ORDERING));
         self.conditional_try_pop_position(pos, predicate)
             .or_else(|| {
                 // Failed to read, release the position.
@@ -267,7 +315,7 @@ impl<T> Segment<T> {
     {
         // See `conditional_pop_front` for documentation, this does the same thing but with
         // a different position.
-        let pos = tail_pos.fetch_sub(1, DEFAULT_ORDERING);
+        let pos = Pos(tail_pos.fetch_sub(1, DEFAULT_ORDERING));
         self.conditional_try_pop_position(pos, predicate)
             .or_else(|| {
                 tail_pos.fetch_add(1, DEFAULT_ORDERING);
@@ -292,10 +340,10 @@ impl<T> Segment<T> {
         // be written.
         //
         // TODO: call get_segment_id only once per read.
-        let segment_id = get_segment_id(pos);
+        let segment_id = pos.get_segment_id();
         if segment_id == self.id {
             // If its this segment we can get the index and write to it.
-            let index = pos_to_index(pos);
+            let index = pos.get_index();
             self.data[index].conditional_try_pop(predicate)
         } else if segment_id < self.id {
             // Otherwise we need to pass the read on to the `prev`ious or
@@ -426,30 +474,6 @@ impl<T> Segment<T> {
         let prev = self.prev.load(Ordering::Relaxed);
         let next = self.next.load(Ordering::Relaxed);
         (prev, next)
-    }
-}
-
-// TODO: benchmark inlining (using the attribute) of these functions:
-
-/// Determine the `SegmentId` based on the `Pos`ition.
-fn get_segment_id(pos: Pos) -> SegmentId {
-    if pos == 0 {
-        0
-    } else if pos.is_negative() {
-        // Slot 0 starts at 0, so Slot -1 starts at -SEGMENT_SIZE.
-        -((pos / SEGMENT_SIZE as isize) - 1)
-    } else {
-        pos / SEGMENT_SIZE as isize
-    }
-}
-
-/// Converts a `Pos`ition into an index for the data array.
-fn pos_to_index(pos: Pos) -> usize {
-    let index = pos % SEGMENT_SIZE as isize;
-    if index.is_negative() {
-        -index as usize
-    } else {
-        index as usize
     }
 }
 
@@ -740,6 +764,47 @@ mod tests {
         #[cfg(target_pointer_width = "32")]
         let want = 8 + (SEGMENT_SIZE * (8 + 8 + 8)) + 4 + 4;
         assert_size::<Segment<u64>>(want);
+    }
+
+    #[test]
+    fn pos() {
+        let tests = vec![
+            // Pos, is valid, `SegmentId`, index.
+            (Pos(0), false, 0, 0),
+
+            (Pos(1), true, 1, 0),
+            (Pos(2), true, 1, 1),
+            (Pos(3), true, 1, 2),
+            (Pos(10), true, 1, 9),
+            (Pos(15), true, 1, 14),
+            (Pos(20), true, 1, 19),
+            (Pos(25), true, 1, 24),
+            (Pos(31), true, 1, 30),
+            (Pos(32), true, 1, 31),
+            (Pos(33), true, 2, 0),
+            (Pos(64), true, 2, 31),
+            (Pos(65), true, 3, 0),
+
+            (Pos(-1), true, -1, 0),
+            (Pos(-2), true, -1, 1),
+            (Pos(-5), true, -1, 4),
+            (Pos(-10), true, -1, 9),
+            (Pos(-20), true, -1, 19),
+            (Pos(-32), true, -1, 31),
+            (Pos(-33), true, -2, 0),
+            (Pos(-64), true, -2, 31),
+            (Pos(-65), true, -3, 0),
+        ];
+
+        for test in tests {
+            let pos = test.0;
+            assert_eq!(pos.is_valid(), test.1, "{}.is_valid()", pos);
+            if pos.is_valid() {
+                debug!("calling with {:?}", pos);
+                assert_eq!(pos.get_segment_id(), test.2, "{}.get_segment_id()", pos);
+                //assert_eq!(pos.get_index(), test.3, "{}.get_index()", pos);
+            }
+        }
     }
 
     #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
