@@ -154,10 +154,12 @@ impl<T> Segment<T> {
         // Note we don't have exclusive access to it so we're still racing for
         // it, hence the fact that `Item` has it's own access control.
         let pos = Pos(head_pos.fetch_sub(1, DEFAULT_ORDERING));
+        trace!("Segment.try_push_front: decreased head position, writing to {}", pos);
         self.try_write_position(pos, data)
             .map_err(|data| {
                 // Failed to write, release the position.
                 let pos = head_pos.fetch_add(1, DEFAULT_ORDERING);
+                trace!("Segment.try_push_front: failed to write to position {}, increased head position", pos);
                 // FIXME: it could also be that a `Item` is (currently)
                 // in a invalid state, what then?
                 data
@@ -174,9 +176,11 @@ impl<T> Segment<T> {
         // See `push_front` for documentation, this does the same thing but with
         // a different position and returned error.
         let pos = Pos(tail_pos.fetch_add(1, DEFAULT_ORDERING));
+        trace!("Segment.try_push_back: increased tail position, writing to {}", pos);
         self.try_write_position(pos, data)
             .map_err(|data| {
                 let pos = tail_pos.fetch_sub(1, DEFAULT_ORDERING);
+                trace!("Segment.try_push_back: failed to write to position {}, decreased tail position", pos);
                 data
             })
     }
@@ -200,12 +204,15 @@ impl<T> Segment<T> {
         if segment_id == self.id {
             // If its this segment we can get the index and write to it.
             let index = pos.get_index();
+            trace!("Segment.try_write_position: writing to segment {}, index {}", segment_id, index);
             self.data[index].try_write(data)
         } else if segment_id < self.id {
             // Otherwise we need to pass the write on to the `prev`ious or
             // `next` segment.
+            trace!("Segment.try_write_position: passing to previous segment {}", self.id - 1);
             try_write_position(&self.prev, pos, data)
         } else {
+            trace!("Segment.try_write_position: passing to next segment {}", self.id + 1);
             try_write_position(&self.next, pos, data)
         }
     }
@@ -222,10 +229,12 @@ impl<T> Segment<T> {
         // Note we don't have exclusive access to it so we're still racing for
         // it, hence the fact that `Item` has it's own access control.
         let pos = Pos(head_pos.fetch_add(1, DEFAULT_ORDERING));
+        trace!("Segment.try_pop_front: increased head position, reading from {}", pos);
         self.try_pop_position(pos)
             .or_else(|| {
                 // Failed to read, release the position.
                 let pos = head_pos.fetch_sub(1, DEFAULT_ORDERING);
+                trace!("Segment.try_pop_front: failed to read from position {}, decreased head position", pos);
                 // FIXME: it could also be that a `Item` is (currently)
                 // in a invalid state, what then?
                 None
@@ -242,9 +251,11 @@ impl<T> Segment<T> {
         // See `pop_front` for documentation, this does the same thing but with
         // a different position.
         let pos = Pos(tail_pos.fetch_sub(1, DEFAULT_ORDERING));
+        trace!("Segment.try_pop_back: decreased tail position, reading from {}", pos);
         self.try_pop_position(pos)
             .or_else(|| {
                 let pos = tail_pos.fetch_add(1, DEFAULT_ORDERING);
+                trace!("Segment.try_pop_back: failed to read from position {}, increased tail position", pos);
                 None
             })
     }
@@ -268,10 +279,12 @@ impl<T> Segment<T> {
         if segment_id == self.id {
             // If its this segment we can get the index and write to it.
             let index = pos.get_index();
+            trace!("Segment.try_pop_position: reading from segment {}, index {}", segment_id, index);
             self.data[index].try_pop()
         } else if segment_id < self.id {
             // Otherwise we need to pass the read on to the `prev`ious or
             // `next` segment.
+            trace!("Segment.try_pop_position: passing to previous segment {}", self.id - 1);
             try_pop_position(&self.prev, pos)
         } else {
             try_pop_position(&self.next, pos)
@@ -498,6 +511,7 @@ fn try_write_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, data: T) -> Resu
         segment.try_write_position(pos, data)
     } else {
         // A next or previous segment doesn't exists, so we return an error.
+        trace!("Segment.try_write_position: failed to write to position {}, doesn't exists", pos);
         Err(data)
     }
 }
@@ -523,6 +537,7 @@ fn try_pop_position<T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos) -> Option<T> {
         segment.try_pop_position(pos)
     } else {
         // A next or previous segment doesn't exists.
+        trace!("Segment.try_pop_position: failed to read from position {}, doesn't exists", pos);
         None
     }
 }
@@ -550,6 +565,7 @@ fn conditional_try_pop_position<P, T>(ptr: &AtomicPtr<Segment<T>>, pos: Pos, pre
         segment.conditional_try_pop_position(pos, predicate)
     } else {
         // A next or previous segment doesn't exists.
+        trace!("Segment.conditional_try_pop_position: failed to read from position {}, doesn't exists", pos);
         None
     }
 }
