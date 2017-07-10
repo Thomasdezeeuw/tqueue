@@ -13,7 +13,7 @@ const DEFAULT_ORDERING: Ordering = Ordering::SeqCst;
 /// [`Segment`]: struct.Segment.html
 //
 // TODO: benchmark smaller and bigger sizes.
-const SEGMENT_SIZE: usize = 32;
+pub const SEGMENT_SIZE: usize = 32;
 
 /// The id of a [`Segment`]. 0 is an invalid id.
 ///
